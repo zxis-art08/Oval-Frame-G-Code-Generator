@@ -12,3 +12,11 @@ Thumbs.db
 
 # Generated NC files (user outputs)
 *.nc
+
+# Design docs (internal only)
+DESIGN.md
+
+# Preset settings exports
+*_settings.json
+*.json
+!package.json
