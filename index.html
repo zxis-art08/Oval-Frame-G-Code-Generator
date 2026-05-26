@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="TwoTrees 450 CNC용 오벌 프레임 가공 NC 파일 자동 생성기">
+  <title>Oval Frame CAM — TwoTrees 450 CNC</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;700;900&family=Space+Grotesk:wght@300;400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=2.4">
+</head>
+<body>
+  <!-- Header -->
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="logo-group">
+        <h1 class="logo-title">OVAL FRAME CAM</h1>
+        <span class="logo-badge">TTC 450 PRO</span>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-outlined-mint" id="btnReset" title="RESET ALL SETTINGS">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+          RESET
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Layout -->
+  <main class="app-main">
+    <!-- Left Panel — Settings -->
+    <aside class="panel panel-settings" id="settingsPanel">
+      <div class="story-stream-rail"></div>
+      
+      <!-- Section: Presets -->
+      <section class="panel-section" id="sectionPresets">
+        <div class="section-header" data-toggle="presetContent">
+          <div class="section-badge-group">
+            <span class="section-kicker">PRESETS</span>
+            <h2 class="section-title">MANAGE PRESETS</h2>
+          </div>
+          <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+        <div class="section-content" id="presetContent">
+          <div class="input-group">
+            <label for="presetSelect">저장된 프리셋 불러오기</label>
+            <select id="presetSelect">
+              <option value="">-- 프리셋 선택 --</option>
+            </select>
+          </div>
+          <div class="input-group">
+            <label for="presetName">프리셋 이름</label>
+            <input type="text" id="presetName" placeholder="예: A타입 타원">
+          </div>
+          <div class="button-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
+            <button class="btn btn-ghost" id="btnSavePreset" style="justify-content: center; font-size: 0.8rem;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/></svg>
+              저장 / 덮어쓰기
+            </button>
+            <button class="btn btn-ghost" id="btnDeletePreset" style="justify-content: center; font-size: 0.8rem; color: var(--accent-red); border-color: rgba(248,113,113,0.2);">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              삭제
+            </button>
+          </div>
+          <div class="button-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+            <button class="btn btn-ghost" id="btnExportPreset" style="justify-content: center; font-size: 0.75rem; padding: 6px var(--space-sm);">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+              내보내기 (.json)
+            </button>
+            <label class="btn btn-ghost" style="justify-content: center; font-size: 0.75rem; cursor: pointer; margin: 0; padding: 6px var(--space-sm);">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+              가져오기
+              <input type="file" id="importPresetFile" accept=".json" style="display: none;">
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section: Frame Dimensions -->
+      <section class="panel-section" id="sectionDimensions">
+        <div class="section-header" data-toggle="dimContent">
+          <div class="section-badge-group">
+            <span class="section-kicker">DIMENSIONS</span>
+            <h2 class="section-title">FRAME DIMENSIONS</h2>
+          </div>
+          <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+        <div class="section-content" id="dimContent">
+          <div class="input-row">
+            <div class="input-group">
+              <label for="ovalWidth">가로 (외부)</label>
+              <div class="input-with-unit">
+                <input type="number" id="ovalWidth" value="300" min="50" max="450" step="1">
+                <span class="unit">mm</span>
+              </div>
+            </div>
+            <div class="input-group">
+              <label for="ovalHeight">세로 (외부)</label>
+              <div class="input-with-unit">
+                <input type="number" id="ovalHeight" value="400" min="50" max="450" step="1">
+                <span class="unit">mm</span>
+              </div>
+            </div>
+          </div>
+          <div class="input-row">
+            <div class="input-group">
+              <label for="frameWidth">프레임 폭 (배면)</label>
+              <div class="input-with-unit">
+                <input type="number" id="frameWidth" value="20" min="10" max="100" step="1">
+                <span class="unit">mm</span>
+              </div>
+            </div>
+            <div class="input-group">
+              <label for="rabbetWidth">래빗 폭 (턱 폭)</label>
+              <div class="input-with-unit">
+                <input type="number" id="rabbetWidth" value="5" min="2" max="50" step="0.5">
+                <span class="unit">mm</span>
+              </div>
+            </div>
+          </div>
+          <div class="input-row">
+            <div class="input-group">
+              <label for="rabbitDepth">래빗 깊이 (파낼 깊이)</label>
+              <div class="input-with-unit">
+                <input type="number" id="rabbitDepth" value="10" min="1" max="40" step="0.5">
+                <span class="unit">mm</span>
+              </div>
+            </div>
+            <div class="input-group">
+              <label for="materialThickness">재료 두께</label>
+              <div class="input-with-unit">
+                <input type="number" id="materialThickness" value="15" min="5" max="80" step="0.5">
+                <span class="unit">mm</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section: Material -->
+      <section class="panel-section" id="sectionMaterial">
+        <div class="section-header" data-toggle="matContent">
+          <div class="section-badge-group">
+            <span class="section-kicker">TOOLING</span>
+            <h2 class="section-title">MATERIAL & CUTTER</h2>
+          </div>
+          <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+        <div class="section-content" id="matContent">
+          <div class="input-group">
+            <label for="woodType">목재 종류</label>
+            <select id="woodType">
+              <option value="softwood">연목 (소나무, 삼나무 등)</option>
+              <option value="hardwood" selected>경목 (참나무, 호두나무 등)</option>
+              <option value="mdf">MDF</option>
+              <option value="plywood">합판</option>
+            </select>
+          </div>
+          <div class="input-row">
+            <div class="input-group">
+              <label for="toolDiameter">엔드밀 직경</label>
+              <div class="input-with-unit">
+                <input type="number" id="toolDiameter" value="6" min="1" max="7" step="0.5">
+                <span class="unit">mm</span>
+              </div>
+            </div>
+            <div class="input-group">
+              <label for="toolFlutes">날 수 (Flutes)</label>
+              <select id="toolFlutes">
+                <option value="1">1날</option>
+                <option value="2" selected>2날</option>
+                <option value="3">3날</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section: Machine Settings -->
+      <section class="panel-section" id="sectionMachine">
+        <div class="section-header" data-toggle="machineContent">
+          <div class="section-badge-group">
+            <span class="section-kicker">PARAMETERS</span>
+            <h2 class="section-title">MACHINE SETTINGS</h2>
+          </div>
+          <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+        <div class="section-content" id="machineContent">
+          <div class="input-group">
+            <label for="cncModel">CNC 모델</label>
+            <select id="cncModel">
+              <option value="ttc450">TTC 450 (775 스핀들, 80W)</option>
+              <option value="ttc450pro" selected>TTC 450 Pro (500W)</option>
+              <option value="ttc450ultra">TTC 450 Ultra (500W)</option>
+            </select>
+          </div>
+          <div class="info-badge">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+            <span id="machineInfo">작업 영역: 460×460mm / 최대 RPM: 12,000 / 최대 이송: 5,000 mm/min</span>
+          </div>
+
+          <!-- Auto-calculated values display -->
+          <div class="calculated-params">
+            <span class="calc-kicker">AUTO-CALCULATED</span>
+            <h3 class="calc-title">PROCESS PARAMETERS</h3>
+            <div class="calc-grid">
+              <div class="calc-item">
+                <span class="calc-label">스핀들 RPM</span>
+                <span class="calc-value" id="calcRPM">12,000</span>
+              </div>
+              <div class="calc-item">
+                <span class="calc-label">이송 속도 (Feed)</span>
+                <span class="calc-value" id="calcFeed">1,200 mm/min</span>
+              </div>
+              <div class="calc-item">
+                <span class="calc-label">절입 깊이 (DOC)</span>
+                <span class="calc-value" id="calcDOC">2.0 mm</span>
+              </div>
+              <div class="calc-item">
+                <span class="calc-label">하강 속도 (Plunge)</span>
+                <span class="calc-value" id="calcPlunge">400 mm/min</span>
+              </div>
+              <div class="calc-item">
+                <span class="calc-label">스텝오버</span>
+                <span class="calc-value" id="calcStepover">2.4 mm (40%)</span>
+              </div>
+              <div class="calc-item">
+                <span class="calc-label">안전 높이</span>
+                <span class="calc-value" id="calcSafeZ">5.0 mm</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section: Advanced Options -->
+      <section class="panel-section" id="sectionAdvanced">
+        <div class="section-header" data-toggle="advContent">
+          <div class="section-badge-group">
+            <span class="section-kicker">ADVANCED</span>
+            <h2 class="section-title">EXTRA OPTIONS</h2>
+          </div>
+          <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+        <div class="section-content collapsed" id="advContent">
+          <div class="input-row">
+            <div class="input-group">
+              <label for="tabCount">탭 개수</label>
+              <input type="number" id="tabCount" value="4" min="2" max="8" step="1">
+            </div>
+            <div class="input-group">
+              <label for="tabWidth">탭 폭</label>
+              <div class="input-with-unit">
+                <input type="number" id="tabWidth" value="6" min="3" max="15" step="0.5">
+                <span class="unit">mm</span>
+              </div>
+            </div>
+          </div>
+          <div class="input-row">
+            <div class="input-group">
+              <label for="tabHeight">탭 높이</label>
+              <div class="input-with-unit">
+                <input type="number" id="tabHeight" value="2" min="1" max="10" step="0.5">
+                <span class="unit">mm</span>
+              </div>
+            </div>
+            <div class="input-group">
+              <label for="finishAllowance">마감 여유</label>
+              <div class="input-with-unit">
+                <input type="number" id="finishAllowance" value="0.3" min="0" max="1" step="0.05">
+                <span class="unit">mm</span>
+              </div>
+            </div>
+          </div>
+          <div class="input-group">
+            <label for="cutDirection">절삭 방향</label>
+            <select id="cutDirection">
+              <option value="climb" selected>클라이밍 (Climb) — 깨끗한 마감</option>
+              <option value="conventional">컨벤셔널 (Conventional) — 안정적</option>
+            </select>
+          </div>
+          <div class="input-group">
+            <label for="originPosition">원점 위치</label>
+            <select id="originPosition">
+              <option value="center" selected>소재 중앙</option>
+              <option value="bottomleft">좌측 하단</option>
+            </select>
+          </div>
+          <div class="checkbox-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="enableRabbit" checked>
+              <span class="checkbox-custom"></span>
+              래빗(단턱) 가공 포함
+            </label>
+          </div>
+          <div class="checkbox-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="enableFinishPass" checked>
+              <span class="checkbox-custom"></span>
+              마감 패스 포함
+            </label>
+          </div>
+        </div>
+      </section>
+    </aside>
+
+    <!-- Center — Canvas Preview -->
+    <div class="panel panel-preview">
+      <div class="preview-toolbar">
+        <div class="preview-tabs">
+          <button class="preview-tab active" data-view="top" id="tabTop">TOP VIEW</button>
+          <button class="preview-tab" data-view="3d" id="tab3D">3D PREVIEW</button>
+          <button class="preview-tab" data-view="toolpath" id="tabToolpath">TOOLPATH</button>
+        </div>
+        <div class="preview-actions">
+          <button class="btn btn-icon" id="btnZoomFit" title="ZOOM FIT">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="canvas-container" id="canvasContainer">
+        <canvas id="previewCanvas"></canvas>
+        <div class="canvas-info" id="canvasInfo">
+          <span id="infoSize">300 × 400 mm</span>
+          <span class="info-divider">|</span>
+          <span id="infoScale">SCALE: 1:1</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Panel — G-code & Output -->
+    <aside class="panel panel-output">
+      <div class="output-header">
+        <div class="section-badge-group">
+          <span class="section-kicker">OUTPUT</span>
+          <h2 class="section-title">G-CODE CONSOLE</h2>
+        </div>
+        <div class="output-actions">
+          <button class="btn btn-icon" id="btnCopyCode" title="COPY CODE">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          </button>
+        </div>
+      </div>
+      
+      <!-- Sub Tabs for Frame vs Template G-code -->
+      <div class="gcode-tabs" style="display: flex; gap: 8px; padding: 8px 16px; border-bottom: 1px solid var(--border-subtle); background: var(--bg-canvas);">
+        <button class="btn btn-outlined-mint active" id="tabGcodeFrame" style="padding: 6px 12px; font-size: 0.72rem; border-radius: var(--radius-xs); letter-spacing: 1px; font-family: var(--font-mono);">FRAME G-CODE</button>
+        <button class="btn btn-outlined-mint" id="tabGcodeTemplate" style="padding: 6px 12px; font-size: 0.72rem; border-radius: var(--radius-xs); letter-spacing: 1px; font-family: var(--font-mono);">TEMPLATE (GADA)</button>
+      </div>
+
+      <div class="gcode-viewer" id="gcodeViewer">
+        <pre id="gcodeOutput"><code>; NC 코드가 여기에 표시됩니다.
+; 설정을 조정한 후 "NC 파일 생성" 버튼을 클릭하세요.</code></pre>
+      </div>
+      <div class="output-stats" id="outputStats">
+        <div class="stat-item">
+          <span class="stat-label">TOTAL LINES</span>
+          <span class="stat-value" id="statLines">—</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">EST. TIME</span>
+          <span class="stat-value" id="statTime">—</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">DISTANCE</span>
+          <span class="stat-value" id="statDistance">—</span>
+        </div>
+      </div>
+      <div class="output-footer">
+        <button class="btn btn-primary btn-lg" id="btnGenerate">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          GENERATE G-CODE SET
+        </button>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+          <button class="btn btn-accent btn-lg" id="btnDownload" disabled style="font-size: 0.75rem; justify-content: center; padding: 10px 12px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            DOWNLOAD FRAME
+          </button>
+          <button class="btn btn-outlined-mint btn-lg" id="btnDownloadTemplate" disabled style="font-size: 0.75rem; justify-content: center; padding: 10px 12px; opacity: 0.25; cursor: not-allowed;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            DOWNLOAD GADA
+          </button>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- Toast Notification -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Debug Console Overlay for Runtime Errors -->
+  <div id="debugConsole" style="position: fixed; bottom: 20px; left: 20px; max-width: 400px; max-height: 180px; overflow-y: auto; background: rgba(0,0,0,0.85); border: 2px solid #ef4444; border-radius: 8px; padding: 12px; color: #fecaca; font-family: monospace; font-size: 11px; z-index: 99999; display: none;">
+    <h4 style="margin: 0 0 6px 0; color: #ef4444; font-weight: bold; font-size: 12px; border-bottom: 1px solid #7f1d1d; padding-bottom: 4px;">런타임 에러 로그</h4>
+    <div id="debugErrors"></div>
+  </div>
+  <script>
+    (function() {
+      const consoleEl = document.getElementById('debugConsole');
+      const errorEl = document.getElementById('debugErrors');
+      window.addEventListener('error', function(e) {
+        consoleEl.style.display = 'block';
+        const p = document.createElement('p');
+        p.style.margin = '4px 0';
+        p.style.lineHeight = '1.4';
+        p.textContent = '[' + new Date().toLocaleTimeString() + '] ' + e.message + ' (' + (e.filename ? e.filename.split('/').pop() : 'unknown') + ':' + e.lineno + ')';
+        errorEl.appendChild(p);
+      });
+    })();
+  </script>
+
+  <script src="gcode-generator.js?v=2.4"></script>
+  <script src="preview-renderer.js?v=2.4"></script>
+  <script src="app.js?v=2.4"></script>
+</body>
+</html>
