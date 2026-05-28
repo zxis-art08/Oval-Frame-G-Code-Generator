@@ -789,8 +789,12 @@ class PreviewRenderer {
           }
         });
 
-        // Fill with semi-transparent mint (engraved groove)
-        ctx.fillStyle = 'rgba(60, 255, 208, 0.15)';
+        // Fill with semi-transparent mint (engraved groove/infill area)
+        if (config.engraveMode === 'infill') {
+          ctx.fillStyle = 'rgba(60, 255, 208, 0.35)'; // darker infill representation
+        } else {
+          ctx.fillStyle = 'rgba(60, 255, 208, 0.15)'; // simple trace groove
+        }
         ctx.fill();
 
         // Calculate effective cut width of the V-bit at engraving depth
@@ -943,7 +947,7 @@ class PreviewRenderer {
 
     // Spec Sheet Box Overlay
     const boxW = 230;
-    const boxH = config.enableText2 ? 193 : 175;
+    const boxH = config.enableText2 ? 211 : 193;
     const boxX = w - boxW - 20;
     const boxY = 20;
 
@@ -968,9 +972,12 @@ class PreviewRenderer {
     const rad = (config.bitAngle / 2) * Math.PI / 180;
     const cutWidth = 2 * config.engraveDepth * Math.tan(rad) + 2 * config.tipRadius;
 
+    const engModeText = config.engraveMode === 'infill' ? '획 내부 음각 (Infill)' : '선 따라 각인 (Trace)';
+
     const specs = [
       { label: '소재 규격', value: `${config.width}x${config.height} mm` },
       { label: '소재 두께', value: `${config.thickness} mm` },
+      { label: '가공 방식', value: engModeText },
       { label: '각인 깊이', value: `${config.engraveDepth} mm` },
       { label: '공구 사양', value: `V-Bit ${config.bitAngle}° (R ${config.tipRadius}mm)` },
       { label: '실질 가공 폭', value: `${cutWidth.toFixed(2)} mm` }

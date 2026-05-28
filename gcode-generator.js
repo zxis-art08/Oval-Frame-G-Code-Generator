@@ -718,14 +718,73 @@ class GCodeGenerator {
       });
     };
 
-    // Gather CNC contours for all enabled text tracks
+    // Gather CNC contours & hatches for all enabled text tracks
     let cncContours = [];
+    let hatchSegments = [];
+    
+    // Stepover pitch (V-Bit effective width * 0.4)
+    const stepover = cutWidth * 0.4;
+
+    const generateHatches = (contoursList) => {
+      const segments = [];
+      let minY = Infinity, maxY = -Infinity;
+      contoursList.forEach(contour => {
+        contour.forEach(pt => {
+          if (pt.y < minY) minY = pt.y;
+          if (pt.y > maxY) maxY = pt.y;
+        });
+      });
+      
+      if (minY !== Infinity && maxY !== -Infinity && stepover > 0.05) {
+        for (let y = minY + stepover / 2; y < maxY; y += stepover) {
+          const intersections = [];
+          contoursList.forEach(contour => {
+            const len = contour.length;
+            if (len < 3) return;
+            for (let i = 0; i < len; i++) {
+              const p1 = contour[i];
+              const p2 = contour[(i + 1) % len];
+              const y1 = p1.y;
+              const y2 = p2.y;
+              const cond1 = (y1 <= y && y < y2);
+              const cond2 = (y2 <= y && y < y1);
+              if (cond1 || cond2) {
+                if (y1 !== y2) {
+                  const t = (y - y1) / (y2 - y1);
+                  const x = p1.x + t * (p2.x - p1.x);
+                  intersections.push(x);
+                }
+              }
+            }
+          });
+          intersections.sort((a, b) => a - b);
+          for (let i = 0; i < intersections.length - 1; i += 2) {
+            segments.push({
+              x1: intersections[i],
+              y1: y,
+              x2: intersections[i + 1],
+              y2: y
+            });
+          }
+        }
+      }
+      return segments;
+    };
+
     if (config.text && font) {
-      cncContours = cncContours.concat(getCncContoursForText(config.text, font, config.fontSize, config.offsetX, config.offsetY));
+      const textContours = getCncContoursForText(config.text, font, config.fontSize, config.offsetX, config.offsetY);
+      cncContours = cncContours.concat(textContours);
+      if (config.engraveMode === 'infill') {
+        hatchSegments = hatchSegments.concat(generateHatches(textContours));
+      }
     }
     if (config.enableText2 && config.text2 && (font2 || config.font2)) {
       const activeF2 = font2 || config.font2;
-      cncContours = cncContours.concat(getCncContoursForText(config.text2, activeF2, config.fontSize2, config.offsetX2, config.offsetY2));
+      const text2Contours = getCncContoursForText(config.text2, activeF2, config.fontSize2, config.offsetX2, config.offsetY2);
+      cncContours = cncContours.concat(text2Contours);
+      if (config.engraveMode === 'infill') {
+        hatchSegments = hatchSegments.concat(generateHatches(text2Contours));
+      }
     }
 
     // ========== HEADER ==========
@@ -767,6 +826,23 @@ class GCodeGenerator {
       const currentZ = -Math.min(pass * doc, engraveDepth);
       lines.push(`; --- Z pass ${pass}/${numZPasses} at Z=${fmt(currentZ)} ---`);
 
+      // 1. Infill Hatching (If infill mode active)
+      if (config.engraveMode === 'infill' && hatchSegments.length > 0) {
+        lines.push('; --- Hatch Infill ---');
+        hatchSegments.forEach((segment, idx) => {
+          lines.push(`G0 Z${fmt(safeZ)}`);
+          lines.push(`G0 X${fmt(segment.x1)} Y${fmt(segment.y1)}`);
+          lines.push(`G1 Z${fmt(currentZ)} F${plungeRate}`);
+          addDist(segment.x1, segment.y1, currentZ);
+
+          lines.push(`G1 X${fmt(segment.x2)} Y${fmt(segment.y2)} F${feedRate}`);
+          addDist(segment.x2, segment.y2, currentZ);
+        });
+        lines.push(`G0 Z${fmt(safeZ)}`);
+      }
+
+      // 2. Contour Clean / Trace Pass
+      lines.push('; --- Outline Contour ---');
       cncContours.forEach((contour, idx) => {
         if (contour.length === 0) return;
         lines.push(`; Contour ${idx + 1}`);

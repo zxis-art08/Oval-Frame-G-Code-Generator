@@ -149,6 +149,7 @@
       offsetX:           parseFloat(document.getElementById('npOffsetX').value) || 0,
       offsetY:           parseFloat(document.getElementById('npOffsetY').value) || 0,
       bold:              document.getElementById('npFontBold').checked,
+      engraveMode:       document.getElementById('npEngraveMode').value,
       // Text 2 options
       enableText2:       document.getElementById('npEnableText2').checked,
       text2:             document.getElementById('npText2').value,
@@ -631,6 +632,7 @@
       document.getElementById('npOffsetX').value = 25;
       document.getElementById('npOffsetY').value = 0;
       document.getElementById('npFontBold').checked = false;
+      document.getElementById('npEngraveMode').value = 'trace';
 
       document.getElementById('npEnableText2').checked = false;
       document.getElementById('text2Row').classList.add('hidden');
@@ -910,7 +912,8 @@
         npFontSize2: parseFloat(document.getElementById('npFontSize2').value),
         npOffsetX2: parseFloat(document.getElementById('npOffsetX2').value),
         npOffsetY2: parseFloat(document.getElementById('npOffsetY2').value),
-        npFontBold2: document.getElementById('npFontBold2').checked
+        npFontBold2: document.getElementById('npFontBold2').checked,
+        npEngraveMode: document.getElementById('npEngraveMode').value
       };
     }
 
@@ -994,7 +997,8 @@
         npFontSize2: config.fontSize2,
         npOffsetX2: config.offsetX2,
         npOffsetY2: config.offsetY2,
-        npFontBold2: config.bold2
+        npFontBold2: config.bold2,
+        npEngraveMode: config.engraveMode
       };
     }
 
