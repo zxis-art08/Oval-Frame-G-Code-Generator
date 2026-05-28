@@ -130,9 +130,9 @@
 
   function getNameplateConfig() {
     return {
-      width:             parseFloat(document.getElementById('npWidth').value) || 200,
-      height:            parseFloat(document.getElementById('npHeight').value) || 100,
-      thickness:         parseFloat(document.getElementById('npThickness').value) || 10,
+      width:             parseFloat(document.getElementById('npWidth').value) || 400,
+      height:            parseFloat(document.getElementById('npHeight').value) || 80,
+      thickness:         parseFloat(document.getElementById('npThickness').value) || 20,
       woodType:          document.getElementById('npWoodType').value,
       shankDiameter:     parseFloat(document.getElementById('npShankDiameter').value) || 3.175,
       tipRadius:         parseFloat(document.getElementById('npTipRadius').value) || 0.1,
@@ -612,9 +612,9 @@
       btnDlTemp.style.opacity = '0.25';
       btnDlTemp.style.cursor = 'not-allowed';
     } else {
-      document.getElementById('npWidth').value = 200;
-      document.getElementById('npHeight').value = 100;
-      document.getElementById('npThickness').value = 10;
+      document.getElementById('npWidth').value = 400;
+      document.getElementById('npHeight').value = 80;
+      document.getElementById('npThickness').value = 20;
       document.getElementById('npWoodType').value = 'hardwood';
       document.getElementById('npShankDiameter').value = 3.175;
       document.getElementById('npTipRadius').value = 0.1;
