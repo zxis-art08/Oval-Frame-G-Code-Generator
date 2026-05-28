@@ -15,8 +15,8 @@
 
   // ========== Google Fonts & CDN Paths ==========
   const FONT_URLS = {
-    NanumGothic: 'https://cdn.jsdelivr.net/gh/naver/nanumfont@master/NanumGothic.ttf',
-    NanumMyeongjo: 'https://cdn.jsdelivr.net/gh/naver/nanumfont@master/NanumMyeongjo.ttf',
+    NanumGothic: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/nanumgothic/NanumGothic-Regular.ttf',
+    NanumMyeongjo: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/nanummyeongjo/NanumMyeongjo-Regular.ttf',
     Jua: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/jua/Jua-Regular.ttf',
     BlackHanSans: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/blackhansans/BlackHanSans-Regular.ttf',
     SpaceGrotesk: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/spacegrotesk/SpaceGrotesk%5Bwght%5D.ttf'
@@ -59,8 +59,10 @@
       height:            parseFloat(document.getElementById('npHeight').value) || 100,
       thickness:         parseFloat(document.getElementById('npThickness').value) || 10,
       woodType:          document.getElementById('npWoodType').value,
-      toolDiameter:      parseFloat(document.getElementById('npToolDiameter').value) || 2.0,
-      toolFlutes:        parseInt(document.getElementById('npToolFlutes').value) || 2,
+      shankDiameter:     parseFloat(document.getElementById('npShankDiameter').value) || 3.175,
+      tipRadius:         parseFloat(document.getElementById('npTipRadius').value) || 0.1,
+      bitAngle:          parseFloat(document.getElementById('npBitAngle').value) || 45,
+      toolFlutes:        parseInt(document.getElementById('npToolFlutes').value) || 1,
       cncModel:          document.getElementById('npCncModel').value,
       engraveDepth:      parseFloat(document.getElementById('npEngraveDepth').value) || 1.5,
       safeZ:             parseFloat(document.getElementById('npSafeZ').value) || 5.0,
@@ -132,14 +134,17 @@
       // Gather machining params (simulating calculateParams using diameter & wood type)
       const params = generator.calculateParams({
         cncModel: config.cncModel,
-        toolDiameter: config.toolDiameter,
+        toolDiameter: config.shankDiameter,
         toolFlutes: config.toolFlutes,
         woodType: config.woodType
       });
 
+      // Engraving specific DOC override for V-bit tip safety
+      const npDoc = Math.min(params.doc, 0.5);
+
       document.getElementById('calcNpRPM').textContent = params.rpm.toLocaleString();
       document.getElementById('calcNpFeed').textContent = `${params.feedRate.toLocaleString()} mm/min`;
-      document.getElementById('calcNpDOC').textContent = `${params.doc} mm`;
+      document.getElementById('calcNpDOC').textContent = `${npDoc} mm`;
       document.getElementById('calcNpPlunge').textContent = `${params.plungeRate.toLocaleString()} mm/min`;
 
       const spec = params.spec;
@@ -485,8 +490,10 @@
       document.getElementById('npHeight').value = 100;
       document.getElementById('npThickness').value = 10;
       document.getElementById('npWoodType').value = 'hardwood';
-      document.getElementById('npToolDiameter').value = 2;
-      document.getElementById('npToolFlutes').value = '2';
+      document.getElementById('npShankDiameter').value = 3.175;
+      document.getElementById('npTipRadius').value = 0.1;
+      document.getElementById('npBitAngle').value = 45;
+      document.getElementById('npToolFlutes').value = '1';
       document.getElementById('npCncModel').value = 'ttc450pro';
       document.getElementById('npEngraveDepth').value = 1.5;
       document.getElementById('npSafeZ').value = 5.0;
@@ -685,7 +692,9 @@
         npHeight: parseFloat(document.getElementById('npHeight').value),
         npThickness: parseFloat(document.getElementById('npThickness').value),
         npWoodType: document.getElementById('npWoodType').value,
-        npToolDiameter: parseFloat(document.getElementById('npToolDiameter').value),
+        npShankDiameter: parseFloat(document.getElementById('npShankDiameter').value),
+        npTipRadius: parseFloat(document.getElementById('npTipRadius').value),
+        npBitAngle: parseFloat(document.getElementById('npBitAngle').value),
         npToolFlutes: parseInt(document.getElementById('npToolFlutes').value),
         npCncModel: document.getElementById('npCncModel').value,
         npEngraveDepth: parseFloat(document.getElementById('npEngraveDepth').value),
@@ -761,7 +770,9 @@
         npHeight: config.height,
         npThickness: config.thickness,
         npWoodType: config.woodType,
-        npToolDiameter: config.toolDiameter,
+        npShankDiameter: config.shankDiameter,
+        npTipRadius: config.tipRadius,
+        npBitAngle: config.bitAngle,
         npToolFlutes: config.toolFlutes,
         npCncModel: config.cncModel,
         npEngraveDepth: config.engraveDepth,
@@ -853,21 +864,42 @@
   document.getElementById('btnNpExportPreset').addEventListener('click', exportPreset);
   document.getElementById('importNpPresetFile').addEventListener('change', importPreset);
 
-  // ========== Event binding for all inputs/selects ==========
-  // Event listeners for automatic preview updates on change
+  // ========== Event binding for all inputs/selects with Debounce ==========
+  function debounce(func, delay) {
+    let timeoutId;
+    return function(...args) {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        func.apply(this, args);
+      }, delay);
+    };
+  }
+
+  const debouncedUpdate = debounce(updateCalcDisplay, 150);
+
   document.addEventListener('input', (e) => {
     const tag = e.target.tagName.toLowerCase();
     const type = e.target.type;
+    const id = e.target.id;
     if ((tag === 'input' && type !== 'file') || tag === 'select') {
-      updateCalcDisplay();
+      if (id === 'npText') {
+        debouncedUpdate(); // 150ms debounce for text entry to prevent lag
+      } else {
+        updateCalcDisplay();
+      }
     }
   });
 
   document.addEventListener('change', (e) => {
     const tag = e.target.tagName.toLowerCase();
     const type = e.target.type;
+    const id = e.target.id;
     if ((tag === 'input' && type !== 'file') || tag === 'select') {
-      updateCalcDisplay();
+      if (id === 'npText') {
+        debouncedUpdate();
+      } else {
+        updateCalcDisplay();
+      }
     }
   });
 

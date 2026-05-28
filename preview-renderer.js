@@ -770,11 +770,15 @@ class PreviewRenderer {
       ctx.fillStyle = 'rgba(60, 255, 208, 0.15)';
       ctx.fill();
 
+      // Calculate effective cut width of the V-bit at engraving depth
+      const rad = (config.bitAngle / 2) * Math.PI / 180;
+      const cutWidth = 2 * config.engraveDepth * Math.tan(rad) + 2 * config.tipRadius;
+
       // Stroke outline (actual cutter path representation)
       ctx.strokeStyle = 'rgba(60, 255, 208, 0.95)';
-      ctx.lineWidth = Math.max(0.5, config.toolDiameter); // show cutter thickness scaled
+      ctx.lineWidth = Math.max(0.2, cutWidth); // show cutter thickness scaled
       if (config.bold) {
-        ctx.lineWidth = Math.max(1.0, config.toolDiameter * 1.5);
+        ctx.lineWidth = Math.max(0.3, cutWidth * 1.5);
       }
       ctx.stroke();
 
@@ -937,11 +941,15 @@ class PreviewRenderer {
     ctx.lineWidth = 0.8;
     ctx.stroke();
 
+    const rad = (config.bitAngle / 2) * Math.PI / 180;
+    const cutWidth = 2 * config.engraveDepth * Math.tan(rad) + 2 * config.tipRadius;
+
     const specs = [
       { label: '소재 규격', value: `${config.width}x${config.height} mm` },
       { label: '소재 두께', value: `${config.thickness} mm` },
       { label: '각인 깊이', value: `${config.engraveDepth} mm` },
-      { label: '가공 공구 사양', value: `Ø${config.toolDiameter} mm (${config.toolFlutes}날)` },
+      { label: '공구 사양', value: `V-Bit ${config.bitAngle}° (R ${config.tipRadius}mm)` },
+      { label: '실질 가공 폭', value: `${cutWidth.toFixed(2)} mm` },
       { label: '각인 문구', value: config.text.substring(0, 10) + (config.text.length > 10 ? '..' : '') },
       { label: '글자 정렬/크기', value: `${config.textAlign} / ${config.fontSize}mm` }
     ];
