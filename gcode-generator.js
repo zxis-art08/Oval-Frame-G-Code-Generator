@@ -554,7 +554,7 @@ class GCodeGenerator {
   /**
    * Generate Nameplate Engraving G-code using opentype.js font path
    */
-  generateNameplate(config, font) {
+  generateNameplate(config, font, font2) {
     const params = this.calculateParams({
       cncModel: config.cncModel,
       toolDiameter: config.shankDiameter,
@@ -622,103 +622,119 @@ class GCodeGenerator {
 
     const fmt = (v) => v.toFixed(3);
 
-    // Get text bounding box at 0,0 first to calculate centering offsets
-    const testPath = font.getPath(config.text, 0, 0, config.fontSize);
-    const bbox = testPath.getBoundingBox();
+    // Contour parser helper for dynamic multiple fonts and properties
+    const getCncContoursForText = (text, fontObj, size, ox, oy) => {
+      if (!text || !fontObj) return [];
+      
+      const testPath = fontObj.getPath(text, 0, 0, size);
+      const bbox = testPath.getBoundingBox();
 
-    // Center point in canvas coordinates (Y-down)
-    const tx_c = (bbox.x1 + bbox.x2) / 2;
-    const ty_c = (bbox.y1 + bbox.y2) / 2;
+      // Center point in canvas coordinates (Y-down)
+      const tx_c = (bbox.x1 + bbox.x2) / 2;
+      const ty_c = (bbox.y1 + bbox.y2) / 2;
 
-    // Helper to map canvas-space (Y-down) to CNC-space (Y-up, origin aware)
-    const mapToCNC = (cx, cy) => {
-      const relX = cx - tx_c;
-      const relY = ty_c - cy; // Flip Y direction
+      // Helper to map canvas-space (Y-down) to CNC-space (Y-up, origin aware)
+      const mapToCNC = (cx, cy) => {
+        const relX = cx - tx_c;
+        const relY = ty_c - cy; // Flip Y direction
 
-      if (config.originPosition === 'center') {
-        return {
-          x: relX + config.offsetX,
-          y: relY + config.offsetY
-        };
-      } else { // bottomleft
-        return {
-          x: (config.width / 2) + relX + config.offsetX,
-          y: (config.height / 2) + relY + config.offsetY
-        };
+        if (config.originPosition === 'center') {
+          return {
+            x: relX + ox,
+            y: relY + oy
+          };
+        } else { // bottomleft
+          return {
+            x: (config.width / 2) + relX + ox,
+            y: (config.height / 2) + relY + oy
+          };
+        }
+      };
+
+      const contours = [];
+      let currentContour = [];
+      let curX = 0, curY = 0;
+      let startX = 0, startY = 0;
+
+      testPath.commands.forEach(cmd => {
+        if (cmd.type === 'M') {
+          if (currentContour.length > 0) {
+            contours.push(currentContour);
+          }
+          currentContour = [{ type: 'M', x: cmd.x, y: cmd.y }];
+          startX = cmd.x;
+          startY = cmd.y;
+          curX = cmd.x;
+          curY = cmd.y;
+        } else if (cmd.type === 'L') {
+          currentContour.push({ type: 'L', x: cmd.x, y: cmd.y });
+          curX = cmd.x;
+          curY = cmd.y;
+        } else if (cmd.type === 'Q') {
+          // Interpolate quadratic Bezier
+          const segments = 8;
+          for (let i = 1; i <= segments; i++) {
+            const t = i / segments;
+            const mt = 1 - t;
+            const x = mt*mt*curX + 2*mt*t*cmd.x1 + t*t*cmd.x;
+            const y = mt*mt*curY + 2*mt*t*cmd.y1 + t*t*cmd.y;
+            currentContour.push({ type: 'L', x, y });
+          }
+          curX = cmd.x;
+          curY = cmd.y;
+        } else if (cmd.type === 'C') {
+          // Interpolate cubic Bezier
+          const segments = 12;
+          for (let i = 1; i <= segments; i++) {
+            const t = i / segments;
+            const mt = 1 - t;
+            const x = mt*mt*mt*curX + 3*mt*mt*t*cmd.x1 + 3*mt*t*t*cmd.x2 + t*t*t*cmd.x;
+            const y = mt*mt*mt*curY + 3*mt*mt*t*cmd.y1 + 3*mt*t*t*cmd.y2 + t*t*t*cmd.y;
+            currentContour.push({ type: 'L', x, y });
+          }
+          curX = cmd.x;
+          curY = cmd.y;
+        } else if (cmd.type === 'Z') {
+          currentContour.push({ type: 'L', x: startX, y: startY });
+          curX = startX;
+          curY = startY;
+        }
+      });
+
+      if (currentContour.length > 0) {
+        contours.push(currentContour);
       }
+
+      // Convert contours to CNC space
+      return contours.map(contour => {
+        return contour.map(cmd => {
+          const pt = mapToCNC(cmd.x, cmd.y);
+          return {
+            type: cmd.type,
+            x: pt.x,
+            y: pt.y
+          };
+        });
+      });
     };
 
-    // Parse path into distinct contours and interpolate curves
-    const contours = [];
-    let currentContour = [];
-    let curX = 0, curY = 0;
-    let startX = 0, startY = 0;
-
-    testPath.commands.forEach(cmd => {
-      if (cmd.type === 'M') {
-        if (currentContour.length > 0) {
-          contours.push(currentContour);
-        }
-        currentContour = [{ type: 'M', x: cmd.x, y: cmd.y }];
-        startX = cmd.x;
-        startY = cmd.y;
-        curX = cmd.x;
-        curY = cmd.y;
-      } else if (cmd.type === 'L') {
-        currentContour.push({ type: 'L', x: cmd.x, y: cmd.y });
-        curX = cmd.x;
-        curY = cmd.y;
-      } else if (cmd.type === 'Q') {
-        // Interpolate quadratic Bezier
-        const segments = 8;
-        for (let i = 1; i <= segments; i++) {
-          const t = i / segments;
-          const mt = 1 - t;
-          const x = mt*mt*curX + 2*mt*t*cmd.x1 + t*t*cmd.x;
-          const y = mt*mt*curY + 2*mt*t*cmd.y1 + t*t*cmd.y;
-          currentContour.push({ type: 'L', x, y });
-        }
-        curX = cmd.x;
-        curY = cmd.y;
-      } else if (cmd.type === 'C') {
-        // Interpolate cubic Bezier
-        const segments = 12;
-        for (let i = 1; i <= segments; i++) {
-          const t = i / segments;
-          const mt = 1 - t;
-          const x = mt*mt*mt*curX + 3*mt*mt*t*cmd.x1 + 3*mt*t*t*cmd.x2 + t*t*t*cmd.x;
-          const y = mt*mt*mt*curY + 3*mt*mt*t*cmd.y1 + 3*mt*t*t*cmd.y2 + t*t*t*cmd.y;
-          currentContour.push({ type: 'L', x, y });
-        }
-        curX = cmd.x;
-        curY = cmd.y;
-      } else if (cmd.type === 'Z') {
-        currentContour.push({ type: 'L', x: startX, y: startY });
-        curX = startX;
-        curY = startY;
-      }
-    });
-
-    if (currentContour.length > 0) {
-      contours.push(currentContour);
+    // Gather CNC contours for all enabled text tracks
+    let cncContours = [];
+    if (config.text && font) {
+      cncContours = cncContours.concat(getCncContoursForText(config.text, font, config.fontSize, config.offsetX, config.offsetY));
     }
-
-    // Convert contours to CNC space
-    const cncContours = contours.map(contour => {
-      return contour.map(cmd => {
-        const pt = mapToCNC(cmd.x, cmd.y);
-        return {
-          type: cmd.type,
-          x: pt.x,
-          y: pt.y
-        };
-      });
-    });
+    if (config.enableText2 && config.text2 && (font2 || config.font2)) {
+      const activeF2 = font2 || config.font2;
+      cncContours = cncContours.concat(getCncContoursForText(config.text2, activeF2, config.fontSize2, config.offsetX2, config.offsetY2));
+    }
 
     // ========== HEADER ==========
     lines.push(`; =============================================`);
     lines.push(`; Nameplate Engraving — ${config.width}×${config.height}mm`);
-    lines.push(`; Text: "${config.text}"`);
+    lines.push(`; Text 1: "${config.text}" (${config.fontSize}mm)`);
+    if (config.enableText2 && config.text2) {
+      lines.push(`; Text 2: "${config.text2}" (${config.fontSize2}mm)`);
+    }
     lines.push(`; Generated by STUDIOHYUN Cam Tool`);
     lines.push(`; Machine: ${params.spec.name}`);
     lines.push(`; Material: ${config.woodType} / ${config.thickness}mm thick`);

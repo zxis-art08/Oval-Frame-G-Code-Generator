@@ -38,14 +38,6 @@
       cdn: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/spacegrotesk/SpaceGrotesk%5Bwght%5D.ttf'
     },
     // Online-only Google Fonts (Dynamic CDN load)
-    NotoSansKR: {
-      local: null,
-      cdn: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/notosanskr/NotoSansKR%5Bwght%5D.ttf'
-    },
-    NotoSerifKR: {
-      local: null,
-      cdn: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/notoserifkr/NotoSerifKR%5Bwght%5D.ttf'
-    },
     NanumPenScript: {
       local: null,
       cdn: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/nanumpenscript/NanumPenScript-Regular.ttf'
@@ -98,10 +90,6 @@
       local: null,
       cdn: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/bagelfatone/BagelFatOne-Regular.ttf'
     },
-    Hahmlet: {
-      local: null,
-      cdn: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/hahmlet/Hahmlet%5Bwght%5D.ttf'
-    },
     Orbit: {
       local: null,
       cdn: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/orbit/Orbit-Regular.ttf'
@@ -110,6 +98,7 @@
 
   let loadedFonts = {};
   let activeFont = null;
+  let activeFont2 = null;
 
   // ========== Preset Storage Keys ==========
   const OVAL_PRESET_KEY = 'oval_cam_presets';
@@ -153,23 +142,31 @@
       engraveDepth:      parseFloat(document.getElementById('npEngraveDepth').value) || 1.5,
       safeZ:             parseFloat(document.getElementById('npSafeZ').value) || 5.0,
       originPosition:    document.getElementById('npOriginPosition').value,
-      // Text options
+      // Text 1 options
       text:              document.getElementById('npText').value,
       fontName:          document.getElementById('npFont').value,
       fontSize:          parseFloat(document.getElementById('npFontSize').value) || 25,
-      textAlign:         document.getElementById('npTextAlign').value || 'center',
       offsetX:           parseFloat(document.getElementById('npOffsetX').value) || 0,
       offsetY:           parseFloat(document.getElementById('npOffsetY').value) || 0,
-      bold:              document.getElementById('npFontBold').checked
+      bold:              document.getElementById('npFontBold').checked,
+      // Text 2 options
+      enableText2:       document.getElementById('npEnableText2').checked,
+      text2:             document.getElementById('npText2').value,
+      fontName2:         document.getElementById('npFont2').value,
+      fontSize2:         parseFloat(document.getElementById('npFontSize2').value) || 12,
+      offsetX2:          parseFloat(document.getElementById('npOffsetX2').value) || 0,
+      offsetY2:          parseFloat(document.getElementById('npOffsetY2').value) || 0,
+      bold2:             document.getElementById('npFontBold2').checked
     };
   }
 
   // ========== Dynamic Font Loading (Offline-First Hybrid) ==========
-  function loadFont(fontName) {
+  function loadFont(fontName, isSecondFont = false) {
     if (loadedFonts[fontName]) {
-      activeFont = loadedFonts[fontName];
+      if (isSecondFont) activeFont2 = loadedFonts[fontName];
+      else activeFont = loadedFonts[fontName];
       updateCalcDisplay();
-      return Promise.resolve(activeFont);
+      return Promise.resolve(loadedFonts[fontName]);
     }
 
     const paths = FONT_PATHS[fontName];
@@ -180,15 +177,20 @@
     statusEl.style.display = 'flex';
     statusTextEl.textContent = `글꼴 '${fontName}' 불러오는 중...`;
 
+    const setFont = (font) => {
+      loadedFonts[fontName] = font;
+      if (isSecondFont) activeFont2 = font;
+      else activeFont = font;
+      statusEl.style.display = 'none';
+      updateCalcDisplay();
+    };
+
     // If local path is null, bypass directly to CDN (Online-only google web font)
     if (!paths.local) {
       statusTextEl.textContent = `구글 CDN에서 '${fontName}' 다운로드 중...`;
       return opentype.load(paths.cdn)
         .then(font => {
-          loadedFonts[fontName] = font;
-          activeFont = font;
-          statusEl.style.display = 'none';
-          updateCalcDisplay();
+          setFont(font);
           showToast(`구글 웹폰트 '${fontName}' 다운로드 완료!`, 'success');
           return font;
         })
@@ -202,10 +204,7 @@
     // Try loading local first, fallback to CDN if it fails
     return opentype.load(paths.local)
       .then(font => {
-        loadedFonts[fontName] = font;
-        activeFont = font;
-        statusEl.style.display = 'none';
-        updateCalcDisplay();
+        setFont(font);
         showToast(`로컬 글꼴 '${fontName}' 불러오기 완료!`, 'success');
         return font;
       })
@@ -215,10 +214,7 @@
         
         return opentype.load(paths.cdn)
           .then(font => {
-            loadedFonts[fontName] = font;
-            activeFont = font;
-            statusEl.style.display = 'none';
-            updateCalcDisplay();
+            setFont(font);
             showToast(`CDN에서 글꼴 '${fontName}' 불러오기 완료!`, 'success');
             return font;
           })
@@ -273,6 +269,7 @@
 
       // Pass font outline to renderer
       config.font = activeFont;
+      config.font2 = activeFont2;
       renderer.render(config, currentView, lastResult.nameplate);
     }
   }
@@ -317,7 +314,11 @@
         // Load font on active module switch if not loaded
         if (!activeFont) {
           const fontVal = document.getElementById('npFont').value;
-          loadFont(fontVal);
+          loadFont(fontVal, false);
+        }
+        if (document.getElementById('npEnableText2').checked && !activeFont2) {
+          const fontVal2 = document.getElementById('npFont2').value;
+          loadFont(fontVal2, true);
         }
       }
 
@@ -468,16 +469,21 @@
 
         showToast(`액자 및 유리 가다용 NC 파일 세트 생성 완료!`, 'success');
       } else {
-        // Nameplate Mode G-code Generation
-        if (!activeFont) {
+        const config = getNameplateConfig();
+        if (config.text && !activeFont) {
           btn.classList.remove('generating');
           btn.disabled = false;
-          showToast('폰트 파일을 불러오는 중입니다. 잠시 후 다시 시도하세요.', 'error');
+          showToast('메인 폰트 파일을 불러오는 중입니다. 잠시 후 다시 시도하세요.', 'error');
+          return;
+        }
+        if (config.enableText2 && config.text2 && !activeFont2) {
+          btn.classList.remove('generating');
+          btn.disabled = false;
+          showToast('추가 폰트(텍스트 2) 파일을 불러오는 중입니다. 잠시 후 다시 시도하세요.', 'error');
           return;
         }
 
-        const config = getNameplateConfig();
-        const result = generator.generateNameplate(config, activeFont);
+        const result = generator.generateNameplate(config, activeFont, activeFont2);
 
         btn.classList.remove('generating');
         btn.disabled = false;
@@ -619,20 +625,29 @@
       document.getElementById('npSafeZ').value = 5.0;
       document.getElementById('npOriginPosition').value = 'bottomleft';
 
-      document.getElementById('npText').value = 'STUDIO HYUN';
+      document.getElementById('npText').value = '김민수';
       document.getElementById('npFont').value = 'NanumGothic';
       document.getElementById('npFontSize').value = 25;
-      document.getElementById('npTextAlign').value = 'center';
-      document.getElementById('npOffsetX').value = 0;
+      document.getElementById('npOffsetX').value = 25;
       document.getElementById('npOffsetY').value = 0;
       document.getElementById('npFontBold').checked = false;
 
+      document.getElementById('npEnableText2').checked = false;
+      document.getElementById('text2Row').classList.add('hidden');
+      document.getElementById('npText2').value = '교장';
+      document.getElementById('npFont2').value = 'NanumGothic';
+      document.getElementById('npFontSize2').value = 12;
+      document.getElementById('npOffsetX2').value = -30;
+      document.getElementById('npOffsetY2').value = 0;
+      document.getElementById('npFontBold2').checked = false;
+
       lastResult.nameplate = null;
+      activeFont2 = null;
       document.getElementById('btnDownloadNameplate').disabled = true;
       updateValidationReport(null);
       
-      // Reload default font
-      loadFont('NanumGothic');
+      // Reload default fonts
+      loadFont('NanumGothic', false);
     }
 
     displayGcodeResult();
@@ -651,12 +666,67 @@
     if (val === 'custom') {
       document.getElementById('fontFileInput').click();
     } else {
-      loadFont(val);
+      loadFont(val, false);
     }
   });
 
   document.getElementById('btnUploadFont').addEventListener('click', () => {
     document.getElementById('fontFileInput').click();
+  });
+
+  // Text 2 Font selector & Upload binding
+  const npFont2Select = document.getElementById('npFont2');
+  npFont2Select.addEventListener('change', (e) => {
+    const val = e.target.value;
+    if (val === 'custom2') {
+      document.getElementById('fontFileInput2').click();
+    } else {
+      loadFont(val, true);
+    }
+  });
+
+  document.getElementById('btnUploadFont2').addEventListener('click', () => {
+    document.getElementById('fontFileInput2').click();
+  });
+
+  document.getElementById('fontFileInput2').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(evt) {
+      try {
+        const font = opentype.parse(evt.target.result);
+        loadedFonts['custom2'] = font;
+        activeFont2 = font;
+
+        const customOption = npFont2Select.querySelector('option[value="custom2"]');
+        customOption.textContent = `커스텀2: ${file.name.substring(0, 10)}`;
+        npFont2Select.value = 'custom2';
+
+        updateCalcDisplay();
+        showToast(`업로드한 폰트 '${file.name}'를 텍스트2에 적용했습니다.`, 'success');
+      } catch(evtErr) {
+        showToast('올바른 글꼴 파일(.ttf, .otf)이 아닙니다.', 'error');
+      }
+    };
+    reader.readAsArrayBuffer(file);
+    e.target.value = '';
+  });
+
+  // Text 2 Visibility Toggle binding
+  const npEnableText2 = document.getElementById('npEnableText2');
+  const text2Row = document.getElementById('text2Row');
+  npEnableText2.addEventListener('change', () => {
+    if (npEnableText2.checked) {
+      text2Row.classList.remove('hidden');
+      if (!activeFont2) {
+        loadFont(npFont2Select.value, true);
+      }
+    } else {
+      text2Row.classList.add('hidden');
+    }
+    updateCalcDisplay();
   });
 
   document.getElementById('fontFileInput').addEventListener('change', (e) => {
@@ -761,10 +831,18 @@
 
     document.getElementById(prefix ? 'npPresetName' : 'presetName').value = name;
     
-    // For nameplate module, reload the selected preset font if changed
-    if (currentModule === 'nameplate' && config.npFont) {
-      if (config.npFont !== 'custom') {
-        loadFont(config.npFont);
+    // For nameplate module, reload the selected preset fonts if changed
+    if (currentModule === 'nameplate') {
+      if (config.npFont && config.npFont !== 'custom') {
+        loadFont(config.npFont, false);
+      }
+      if (config.npEnableText2) {
+        document.getElementById('text2Row').classList.remove('hidden');
+        if (config.npFont2 && config.npFont2 !== 'custom2') {
+          loadFont(config.npFont2, true);
+        }
+      } else {
+        document.getElementById('text2Row').classList.add('hidden');
       }
     }
 
@@ -823,10 +901,16 @@
         npText: document.getElementById('npText').value,
         npFont: document.getElementById('npFont').value,
         npFontSize: parseFloat(document.getElementById('npFontSize').value),
-        npTextAlign: document.getElementById('npTextAlign').value,
         npOffsetX: parseFloat(document.getElementById('npOffsetX').value),
         npOffsetY: parseFloat(document.getElementById('npOffsetY').value),
-        npFontBold: document.getElementById('npFontBold').checked
+        npFontBold: document.getElementById('npFontBold').checked,
+        npEnableText2: document.getElementById('npEnableText2').checked,
+        npText2: document.getElementById('npText2').value,
+        npFont2: document.getElementById('npFont2').value,
+        npFontSize2: parseFloat(document.getElementById('npFontSize2').value),
+        npOffsetX2: parseFloat(document.getElementById('npOffsetX2').value),
+        npOffsetY2: parseFloat(document.getElementById('npOffsetY2').value),
+        npFontBold2: document.getElementById('npFontBold2').checked
       };
     }
 
@@ -901,10 +985,16 @@
         npText: config.text,
         npFont: config.fontName,
         npFontSize: config.fontSize,
-        npTextAlign: config.textAlign,
         npOffsetX: config.offsetX,
         npOffsetY: config.offsetY,
-        npFontBold: config.bold
+        npFontBold: config.bold,
+        npEnableText2: config.enableText2,
+        npText2: config.text2,
+        npFont2: config.fontName2,
+        npFontSize2: config.fontSize2,
+        npOffsetX2: config.offsetX2,
+        npOffsetY2: config.offsetY2,
+        npFontBold2: config.bold2
       };
     }
 
@@ -954,10 +1044,18 @@
         const prefix = currentModule === 'oval' ? '' : 'np';
         document.getElementById(prefix ? 'npPresetName' : 'presetName').value = presetName;
 
-        // If Nameplate, reload the loaded font if it exists
-        if (currentModule === 'nameplate' && config.npFont) {
-          if (config.npFont !== 'custom') {
-            loadFont(config.npFont);
+        // If Nameplate, reload the loaded fonts if they exist
+        if (currentModule === 'nameplate') {
+          if (config.npFont && config.npFont !== 'custom') {
+            loadFont(config.npFont, false);
+          }
+          if (config.npEnableText2) {
+            document.getElementById('text2Row').classList.remove('hidden');
+            if (config.npFont2 && config.npFont2 !== 'custom2') {
+              loadFont(config.npFont2, true);
+            }
+          } else {
+            document.getElementById('text2Row').classList.add('hidden');
           }
         }
 
@@ -1002,7 +1100,7 @@
     const type = e.target.type;
     const id = e.target.id;
     if ((tag === 'input' && type !== 'file') || tag === 'select') {
-      if (id === 'npText') {
+      if (id === 'npText' || id === 'npText2') {
         debouncedUpdate(); // 150ms debounce for text entry to prevent lag
       } else {
         updateCalcDisplay();
@@ -1015,7 +1113,7 @@
     const type = e.target.type;
     const id = e.target.id;
     if ((tag === 'input' && type !== 'file') || tag === 'select') {
-      if (id === 'npText') {
+      if (id === 'npText' || id === 'npText2') {
         debouncedUpdate();
       } else {
         updateCalcDisplay();

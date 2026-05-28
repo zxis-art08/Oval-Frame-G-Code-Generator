@@ -712,77 +712,101 @@ class PreviewRenderer {
     ctx.strokeRect(px, py, plateW, plateH);
 
     // 2. Text rendering (WYSIWYG)
-    if (!config.text) {
+    const hasText1 = !!config.text;
+    const hasText2 = config.enableText2 && !!config.text2;
+
+    if (!hasText1 && !hasText2) {
       ctx.fillStyle = '#949494';
       ctx.font = '500 12px "Space Mono"';
       ctx.textAlign = 'center';
       ctx.fillText('No Text Input', cx, cy);
-    } else if (!config.font) {
+    } else if ((hasText1 && !config.font) || (hasText2 && !config.font2)) {
       ctx.fillStyle = '#949494';
       ctx.font = '500 12px "Space Mono"';
       ctx.textAlign = 'center';
       ctx.fillText('Loading Font...', cx, cy);
     } else {
-      const font = config.font;
-      
-      // Calculate font path bounding box at 0,0 to center it
-      const testPath = font.getPath(config.text, 0, 0, config.fontSize);
-      const bbox = testPath.getBoundingBox();
-
-      // Find baseline offsets
-      const bx = (bbox.x1 + bbox.x2) / 2;
-      const by = (bbox.y1 + bbox.y2) / 2;
-
-      // Centered position (relative to plate top-left in millimeters)
-      let tx = config.width / 2 - bx;
-      let ty = config.height / 2 - by;
-
-      // Apply user offsets
-      tx += config.offsetX;
-      ty -= config.offsetY;
-
-      // Apply bold styling if checked (we can simulate standard bold by drawing multiple overlapping strokes or loading bold font)
-      // opentype.js draws custom curves. We will fetch the outline path.
-      const path = font.getPath(config.text, tx, ty, config.fontSize);
-
-      // Save context state, apply translation to plate top-left, and scale
-      ctx.save();
-      ctx.translate(px, py);
-      ctx.scale(s, s);
-
-      // Draw the path outline representing the engraving cut
-      ctx.beginPath();
-      path.commands.forEach(cmd => {
-        if (cmd.type === 'M') {
-          ctx.moveTo(cmd.x, cmd.y);
-        } else if (cmd.type === 'L') {
-          ctx.lineTo(cmd.x, cmd.y);
-        } else if (cmd.type === 'Q') {
-          ctx.quadraticCurveTo(cmd.x1, cmd.y1, cmd.x, cmd.y);
-        } else if (cmd.type === 'C') {
-          ctx.bezierCurveTo(cmd.x1, cmd.y1, cmd.x2, cmd.y2, cmd.x, cmd.y);
-        } else if (cmd.type === 'Z') {
-          ctx.closePath();
-        }
-      });
-
-      // Fill with semi-transparent mint (engraved groove)
-      ctx.fillStyle = 'rgba(60, 255, 208, 0.15)';
-      ctx.fill();
-
-      // Calculate effective cut width of the V-bit at engraving depth
-      const rad = (config.bitAngle / 2) * Math.PI / 180;
-      const cutWidth = 2 * config.engraveDepth * Math.tan(rad) + 2 * config.tipRadius;
-
-      // Stroke outline (actual cutter path representation)
-      ctx.strokeStyle = 'rgba(60, 255, 208, 0.95)';
-      ctx.lineWidth = Math.max(0.2, cutWidth); // show cutter thickness scaled
-      if (config.bold) {
-        ctx.lineWidth = Math.max(0.3, cutWidth * 1.5);
+      const renderTexts = [];
+      if (hasText1 && config.font) {
+        renderTexts.push({
+          text: config.text,
+          font: config.font,
+          fontSize: config.fontSize,
+          offsetX: config.offsetX,
+          offsetY: config.offsetY,
+          bold: config.bold
+        });
       }
-      ctx.stroke();
+      if (hasText2 && config.font2) {
+        renderTexts.push({
+          text: config.text2,
+          font: config.font2,
+          fontSize: config.fontSize2,
+          offsetX: config.offsetX2,
+          offsetY: config.offsetY2,
+          bold: config.bold2
+        });
+      }
 
-      ctx.restore();
+      renderTexts.forEach(t => {
+        // Calculate font path bounding box at 0,0 to center it
+        const testPath = t.font.getPath(t.text, 0, 0, t.fontSize);
+        const bbox = testPath.getBoundingBox();
+
+        // Find baseline offsets
+        const bx = (bbox.x1 + bbox.x2) / 2;
+        const by = (bbox.y1 + bbox.y2) / 2;
+
+        // Centered position (relative to plate top-left in millimeters)
+        let tx = config.width / 2 - bx;
+        let ty = config.height / 2 - by;
+
+        // Apply user offsets
+        tx += t.offsetX;
+        ty -= t.offsetY;
+
+        // Fetch outline path
+        const path = t.font.getPath(t.text, tx, ty, t.fontSize);
+
+        // Save context state, apply translation to plate top-left, and scale
+        ctx.save();
+        ctx.translate(px, py);
+        ctx.scale(s, s);
+
+        // Draw the path outline representing the engraving cut
+        ctx.beginPath();
+        path.commands.forEach(cmd => {
+          if (cmd.type === 'M') {
+            ctx.moveTo(cmd.x, cmd.y);
+          } else if (cmd.type === 'L') {
+            ctx.lineTo(cmd.x, cmd.y);
+          } else if (cmd.type === 'Q') {
+            ctx.quadraticCurveTo(cmd.x1, cmd.y1, cmd.x, cmd.y);
+          } else if (cmd.type === 'C') {
+            ctx.bezierCurveTo(cmd.x1, cmd.y1, cmd.x2, cmd.y2, cmd.x, cmd.y);
+          } else if (cmd.type === 'Z') {
+            ctx.closePath();
+          }
+        });
+
+        // Fill with semi-transparent mint (engraved groove)
+        ctx.fillStyle = 'rgba(60, 255, 208, 0.15)';
+        ctx.fill();
+
+        // Calculate effective cut width of the V-bit at engraving depth
+        const rad = (config.bitAngle / 2) * Math.PI / 180;
+        const cutWidth = 2 * config.engraveDepth * Math.tan(rad) + 2 * config.tipRadius;
+
+        // Stroke outline (actual cutter path representation)
+        ctx.strokeStyle = 'rgba(60, 255, 208, 0.95)';
+        ctx.lineWidth = Math.max(0.2, cutWidth); // show cutter thickness scaled
+        if (t.bold) {
+          ctx.lineWidth = Math.max(0.3, cutWidth * 1.5);
+        }
+        ctx.stroke();
+
+        ctx.restore();
+      });
     }
 
     // 3. Dimensions
@@ -919,7 +943,7 @@ class PreviewRenderer {
 
     // Spec Sheet Box Overlay
     const boxW = 230;
-    const boxH = 175;
+    const boxH = config.enableText2 ? 193 : 175;
     const boxX = w - boxW - 20;
     const boxY = 20;
 
@@ -949,10 +973,16 @@ class PreviewRenderer {
       { label: '소재 두께', value: `${config.thickness} mm` },
       { label: '각인 깊이', value: `${config.engraveDepth} mm` },
       { label: '공구 사양', value: `V-Bit ${config.bitAngle}° (R ${config.tipRadius}mm)` },
-      { label: '실질 가공 폭', value: `${cutWidth.toFixed(2)} mm` },
-      { label: '각인 문구', value: config.text.substring(0, 10) + (config.text.length > 10 ? '..' : '') },
-      { label: '글자 정렬/크기', value: `${config.textAlign} / ${config.fontSize}mm` }
+      { label: '실질 가공 폭', value: `${cutWidth.toFixed(2)} mm` }
     ];
+
+    if (config.enableText2 && config.text2) {
+      specs.push({ label: '각인 문구 1', value: `${config.text.substring(0, 7)}${config.text.length > 7 ? '..' : ''} (${config.fontSize}mm)` });
+      specs.push({ label: '각인 문구 2', value: `${config.text2.substring(0, 7)}${config.text2.length > 7 ? '..' : ''} (${config.fontSize2}mm)` });
+    } else {
+      specs.push({ label: '각인 문구', value: config.text.substring(0, 10) + (config.text.length > 10 ? '..' : '') });
+      specs.push({ label: '글자 크기', value: `${config.fontSize} mm` });
+    }
 
     let rowY = boxY + 50;
     ctx.font = '500 9px "Space Mono"';

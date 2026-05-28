@@ -549,38 +549,36 @@
 
       <!-- Text Editing Toolbar (Only visible in Nameplate Mode) -->
       <div class="text-toolbar hidden" id="textToolbar">
+        <!-- Text 1 (Primary) -->
         <div class="text-tool-row">
-          <div class="text-tool-group text-input-group">
-            <label for="npText">각인 텍스트</label>
-            <input type="text" id="npText" value="STUDIO HYUN" placeholder="각인할 문구를 입력하세요.">
+          <div class="text-tool-group text-input-group" style="width: 200px;">
+            <label for="npText">각인 텍스트 1 (메인)</label>
+            <input type="text" id="npText" value="김민수" placeholder="메인 텍스트">
           </div>
           <div class="text-tool-group" style="width: 140px;">
-            <label for="npFont">글꼴 (Font)</label>
+            <label for="npFont">글꼴 1</label>
             <select id="npFont">
-              <optgroup label="오프라인 우선 글꼴 (공방/오프라인 가공 추천)">
+              <optgroup label="오프라인 우선 글꼴 (공방/오프라인 추천)">
                 <option value="NanumGothic" selected>나눔고딕 (기본 한글)</option>
                 <option value="NanumMyeongjo">나눔명조 (명조체)</option>
                 <option value="Jua">주아체 (라운드)</option>
                 <option value="BlackHanSans">블랙한산스 (굵은 타이틀)</option>
                 <option value="SpaceGrotesk">Space Grotesk (영문)</option>
               </optgroup>
-              <optgroup label="구글 온라인 웹폰트 (인터넷 연결 필요)">
-                <option value="NotoSansKR">노토산스 KR (본문/깔끔)</option>
-                <option value="NotoSerifKR">노토세리프 KR (명조/단정)</option>
+              <optgroup label="구글 온라인 웹폰트 (인터넷 필요)">
                 <option value="NanumPenScript">나눔손글씨 펜체</option>
                 <option value="NanumBrushScript">나눔손글씨 붓체</option>
-                <option value="GowunDodum">고운돋움 (둥글고 단정)</option>
+                <option value="GowunDodum">고운돋움 (단정)</option>
                 <option value="GowunBatang">고운바탕 (손글씨 바탕체)</option>
                 <option value="Dongle">동글체 (조밀하고 둥글)</option>
                 <option value="SingleDay">싱글데이체 (손글씨체)</option>
                 <option value="SongMyung">송명체 (클래식 붓글씨)</option>
-                <option value="EastSeaDokdo">독도체 (거친 아웃라인)</option>
-                <option value="GamjaFlower">감자꽃체 (귀여운 손글씨)</option>
+                <option value="EastSeaDokdo">독도체 (거친 필체)</option>
+                <option value="GamjaFlower">감자꽃체 (귀여운 필체)</option>
                 <option value="DoHyeon">도현체 (배민 굵은 서체)</option>
                 <option value="YeonSung">연성체 (배민 손글씨체)</option>
-                <option value="PoorStory">푸어스토리체 (정겨운 손글씨)</option>
-                <option value="BagelFatOne">베이글팻원체 (매우 통통)</option>
-                <option value="Hahmlet">함렛체 (세련된 서체)</option>
+                <option value="PoorStory">푸어스토리체 (정겨운 글씨)</option>
+                <option value="BagelFatOne">베이글팻원체 (통통)</option>
                 <option value="Orbit">오르빗체 (미래지향형)</option>
               </optgroup>
               <optgroup label="커스텀 글꼴">
@@ -589,35 +587,25 @@
             </select>
             <input type="file" id="fontFileInput" accept=".ttf,.otf" style="display: none;">
           </div>
-          <button class="btn btn-ghost btn-sm" id="btnUploadFont" style="padding: 6px 12px; margin-top: 18px; font-size: 0.72rem; border-radius: var(--radius-xs);">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+          <button class="btn btn-ghost btn-sm" id="btnUploadFont" style="padding: 6px 10px; margin-top: 18px; font-size: 0.72rem; border-radius: var(--radius-xs);" title="글꼴 업로드">
             업로드
           </button>
-        </div>
-        <div class="text-tool-row" style="margin-top: 8px;">
-          <div class="text-tool-group" style="width: 75px;">
+          
+          <div class="text-tool-group" style="width: 65px; margin-left: 8px;">
             <label for="npFontSize">크기</label>
             <div class="input-with-unit">
               <input type="number" id="npFontSize" value="25" min="5" max="150" step="1">
               <span class="unit">mm</span>
             </div>
           </div>
-          <div class="text-tool-group" style="width: 100px;">
-            <label for="npTextAlign">정렬</label>
-            <select id="npTextAlign">
-              <option value="left">왼쪽</option>
-              <option value="center" selected>가운데</option>
-              <option value="right">오른쪽</option>
-            </select>
-          </div>
-          <div class="text-tool-group" style="width: 70px;">
+          <div class="text-tool-group" style="width: 60px;">
             <label for="npOffsetX">X 이동</label>
             <div class="input-with-unit">
-              <input type="number" id="npOffsetX" value="0" min="-200" max="200" step="1">
+              <input type="number" id="npOffsetX" value="25" min="-200" max="200" step="1">
               <span class="unit">mm</span>
             </div>
           </div>
-          <div class="text-tool-group" style="width: 70px;">
+          <div class="text-tool-group" style="width: 60px;">
             <label for="npOffsetY">Y 이동</label>
             <div class="input-with-unit">
               <input type="number" id="npOffsetY" value="0" min="-200" max="200" step="1">
@@ -631,7 +619,88 @@
               굵게
             </label>
           </div>
+          
+          <div class="text-tool-group" style="display: flex; align-items: flex-end; margin-bottom: 2px; margin-left: 15px;">
+            <label class="checkbox-label" style="margin: 0; padding-bottom: 6px; color: var(--accent-mint); font-weight: bold;">
+              <input type="checkbox" id="npEnableText2">
+              <span class="checkbox-custom"></span>
+              텍스트 2 추가
+            </label>
+          </div>
         </div>
+
+        <!-- Text 2 (Secondary, hidden by default) -->
+        <div class="text-tool-row hidden" id="text2Row" style="margin-top: 8px; border-top: 1px dashed var(--border-subtle); padding-top: 8px;">
+          <div class="text-tool-group text-input-group" style="width: 200px;">
+            <label for="npText2">각인 텍스트 2 (추가)</label>
+            <input type="text" id="npText2" value="교장" placeholder="추가 텍스트">
+          </div>
+          <div class="text-tool-group" style="width: 140px;">
+            <label for="npFont2">글꼴 2</label>
+            <select id="npFont2">
+              <optgroup label="오프라인 우선 글꼴 (공방/오프라인 추천)">
+                <option value="NanumGothic" selected>나눔고딕 (기본 한글)</option>
+                <option value="NanumMyeongjo">나눔명조 (명조체)</option>
+                <option value="Jua">주아체 (라운드)</option>
+                <option value="BlackHanSans">블랙한산스 (굵은 타이틀)</option>
+                <option value="SpaceGrotesk">Space Grotesk (영문)</option>
+              </optgroup>
+              <optgroup label="구글 온라인 웹폰트 (인터넷 필요)">
+                <option value="NanumPenScript">나눔손글씨 펜체</option>
+                <option value="NanumBrushScript">나눔손글씨 붓체</option>
+                <option value="GowunDodum">고운돋움</option>
+                <option value="GowunBatang">고운바탕</option>
+                <option value="Dongle">동글체</option>
+                <option value="SingleDay">싱글데이체</option>
+                <option value="SongMyung">송명체</option>
+                <option value="EastSeaDokdo">독도체</option>
+                <option value="GamjaFlower">감자꽃체</option>
+                <option value="DoHyeon">도현체</option>
+                <option value="YeonSung">연성체</option>
+                <option value="PoorStory">푸어스토리체</option>
+                <option value="BagelFatOne">베이글팻원체</option>
+                <option value="Orbit">오르빗체</option>
+              </optgroup>
+              <optgroup label="커스텀 글꼴">
+                <option value="custom2">-- 폰트 파일 직접 업로드 --</option>
+              </optgroup>
+            </select>
+            <input type="file" id="fontFileInput2" accept=".ttf,.otf" style="display: none;">
+          </div>
+          <button class="btn btn-ghost btn-sm" id="btnUploadFont2" style="padding: 6px 10px; margin-top: 18px; font-size: 0.72rem; border-radius: var(--radius-xs);" title="글꼴 업로드">
+            업로드
+          </button>
+          
+          <div class="text-tool-group" style="width: 65px; margin-left: 8px;">
+            <label for="npFontSize2">크기</label>
+            <div class="input-with-unit">
+              <input type="number" id="npFontSize2" value="12" min="5" max="150" step="1">
+              <span class="unit">mm</span>
+            </div>
+          </div>
+          <div class="text-tool-group" style="width: 60px;">
+            <label for="npOffsetX2">X 이동</label>
+            <div class="input-with-unit">
+              <input type="number" id="npOffsetX2" value="-30" min="-200" max="200" step="1">
+              <span class="unit">mm</span>
+            </div>
+          </div>
+          <div class="text-tool-group" style="width: 60px;">
+            <label for="npOffsetY2">Y 이동</label>
+            <div class="input-with-unit">
+              <input type="number" id="npOffsetY2" value="0" min="-200" max="200" step="1">
+              <span class="unit">mm</span>
+            </div>
+          </div>
+          <div class="text-tool-group" style="display: flex; align-items: flex-end; margin-bottom: 2px;">
+            <label class="checkbox-label" style="margin: 0; padding-bottom: 6px;">
+              <input type="checkbox" id="npFontBold2">
+              <span class="checkbox-custom"></span>
+              굵게
+            </label>
+          </div>
+        </div>
+
         <!-- Status indicator for font loading -->
         <div class="font-status" id="fontStatus" style="font-family: var(--font-mono); font-size: 0.7rem; color: var(--accent-mint); margin-top: 6px; display: none; align-items: center; gap: 6px;">
           <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent-mint); animation: pulse 1s infinite alternate;"></span>
