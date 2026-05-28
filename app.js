@@ -13,13 +13,28 @@
   let lastResult = { frame: null, template: null, nameplate: null };
   let currentGcodeTab = 'frame'; // 'frame' or 'template' (for oval)
 
-  // ========== Google Fonts & CDN Paths ==========
-  const FONT_URLS = {
-    NanumGothic: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/nanumgothic/NanumGothic-Regular.ttf',
-    NanumMyeongjo: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/nanummyeongjo/NanumMyeongjo-Regular.ttf',
-    Jua: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/jua/Jua-Regular.ttf',
-    BlackHanSans: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/blackhansans/BlackHanSans-Regular.ttf',
-    SpaceGrotesk: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/spacegrotesk/SpaceGrotesk%5Bwght%5D.ttf'
+  // ========== Google Fonts Paths (Local Primary, CDN Fallback) ==========
+  const FONT_PATHS = {
+    NanumGothic: {
+      local: 'fonts/NanumGothic-Regular.ttf',
+      cdn: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/nanumgothic/NanumGothic-Regular.ttf'
+    },
+    NanumMyeongjo: {
+      local: 'fonts/NanumMyeongjo-Regular.ttf',
+      cdn: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/nanummyeongjo/NanumMyeongjo-Regular.ttf'
+    },
+    Jua: {
+      local: 'fonts/Jua-Regular.ttf',
+      cdn: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/jua/Jua-Regular.ttf'
+    },
+    BlackHanSans: {
+      local: 'fonts/BlackHanSans-Regular.ttf',
+      cdn: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/blackhansans/BlackHanSans-Regular.ttf'
+    },
+    SpaceGrotesk: {
+      local: 'fonts/SpaceGrotesk-Regular.ttf',
+      cdn: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/spacegrotesk/SpaceGrotesk%5Bwght%5D.ttf'
+    }
   };
 
   let loadedFonts = {};
@@ -78,7 +93,7 @@
     };
   }
 
-  // ========== Dynamic Font Loading ==========
+  // ========== Dynamic Font Loading (Offline-First Hybrid) ==========
   function loadFont(fontName) {
     if (loadedFonts[fontName]) {
       activeFont = loadedFonts[fontName];
@@ -86,27 +101,42 @@
       return Promise.resolve(activeFont);
     }
 
-    const url = FONT_URLS[fontName];
-    if (!url) return Promise.reject('Invalid font name');
+    const paths = FONT_PATHS[fontName];
+    if (!paths) return Promise.reject('Invalid font name');
 
     const statusEl = document.getElementById('fontStatus');
     const statusTextEl = document.getElementById('fontStatusText');
     statusEl.style.display = 'flex';
-    statusTextEl.textContent = `구글 폰트 '${fontName}' 다운로드 중...`;
+    statusTextEl.textContent = `글꼴 '${fontName}' 불러오는 중...`;
 
-    return opentype.load(url)
+    // Try loading local first, fallback to CDN if it fails
+    return opentype.load(paths.local)
       .then(font => {
         loadedFonts[fontName] = font;
         activeFont = font;
         statusEl.style.display = 'none';
         updateCalcDisplay();
-        showToast(`폰트 '${fontName}' 불러오기 완료!`, 'success');
+        showToast(`로컬 글꼴 '${fontName}' 불러오기 완료!`, 'success');
         return font;
       })
-      .catch(err => {
-        statusEl.style.display = 'none';
-        showToast(`폰트 로드 실패! 로컬 폰트를 업로드하여 가공할 수 있습니다.`, 'error');
-        console.error(err);
+      .catch(localErr => {
+        console.warn(`Local font load failed for ${fontName}, trying CDN...`, localErr);
+        statusTextEl.textContent = `로컬 실패. 구글 CDN에서 '${fontName}' 다운로드 중...`;
+        
+        return opentype.load(paths.cdn)
+          .then(font => {
+            loadedFonts[fontName] = font;
+            activeFont = font;
+            statusEl.style.display = 'none';
+            updateCalcDisplay();
+            showToast(`CDN에서 글꼴 '${fontName}' 불러오기 완료!`, 'success');
+            return font;
+          })
+          .catch(cdnErr => {
+            statusEl.style.display = 'none';
+            showToast(`글꼴 로드 실패! 외부 인터넷 연결 상태를 확인하거나 로컬 폰트파일(.ttf)을 직접 업로드하세요.`, 'error');
+            console.error('All font load attempts failed:', cdnErr);
+          });
       });
   }
 
