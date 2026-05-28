@@ -1156,6 +1156,170 @@
     setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 3200);
   }
 
+  // ========== Canvas Drag & Drop Text positioning (Premium UX) ==========
+  let dragStartMouse = { x: 0, y: 0 };
+  let dragStartOffset = { x: 0, y: 0 };
+  let dragStartOffset2 = { x: 0, y: 0 };
+  let activeDragTarget = null; // 'text1' or 'text2' or null
+
+  function getMousePos(e) {
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    return {
+      x: clientX - rect.left,
+      y: clientY - rect.top
+    };
+  }
+
+  function getPlateGeometry() {
+    const s = renderer.scale;
+    const cx = renderer.w / 2;
+    const cy = renderer.h / 2;
+    const config = getNameplateConfig();
+    const plateW = config.width * s;
+    const plateH = config.height * s;
+    return {
+      s,
+      px: cx - plateW / 2,
+      py: cy - plateH / 2,
+      width: config.width,
+      height: config.height
+    };
+  }
+
+  function hitTestText(mx, my) {
+    if (currentModule !== 'nameplate' || currentView !== 'top') return null;
+    
+    const geom = getPlateGeometry();
+    const config = getNameplateConfig();
+    
+    // Check Text 2 first (overlapping check priority)
+    if (config.enableText2 && config.text2 && activeFont2) {
+      const hit = checkTextHit(config.text2, activeFont2, config.fontSize2, config.offsetX2, config.offsetY2, mx, my, geom);
+      if (hit) return 'text2';
+    }
+    
+    // Check Text 1
+    if (config.text && activeFont) {
+      const hit = checkTextHit(config.text, activeFont, config.fontSize, config.offsetX, config.offsetY, mx, my, geom);
+      if (hit) return 'text1';
+    }
+    
+    return null;
+  }
+
+  function checkTextHit(text, font, fontSize, offsetX, offsetY, mx, my, geom) {
+    const { s, px, py, width, height } = geom;
+    
+    const testPath = font.getPath(text, 0, 0, fontSize);
+    const bbox = testPath.getBoundingBox();
+    const bx = (bbox.x1 + bbox.x2) / 2;
+    const by = (bbox.y1 + bbox.y2) / 2;
+    
+    let tx = width / 2 - bx;
+    let ty = height / 2 - by;
+    
+    tx += offsetX;
+    ty -= offsetY;
+    
+    // Translate mouse px coordinate to plate relative mm coordinates (Y-down)
+    const mx_mm = (mx - px) / s;
+    const my_mm = (my - py) / s;
+    
+    const pad = 4; // 4mm padding click buffer
+    const hitX = (mx_mm >= tx + bbox.x1 - pad) && (mx_mm <= tx + bbox.x2 + pad);
+    const hitY = (my_mm >= ty + bbox.y1 - pad) && (my_mm <= ty + bbox.y2 + pad);
+    
+    return hitX && hitY;
+  }
+
+  function startDrag(e) {
+    if (currentModule !== 'nameplate' || currentView !== 'top') return;
+    
+    const mouse = getMousePos(e);
+    const hit = hitTestText(mouse.x, mouse.y);
+    if (!hit) return;
+    
+    activeDragTarget = hit;
+    
+    const geom = getPlateGeometry();
+    dragStartMouse = {
+      x: mouse.x / geom.s,
+      y: mouse.y / geom.s
+    };
+    
+    const config = getNameplateConfig();
+    dragStartOffset = { x: config.offsetX, y: config.offsetY };
+    dragStartOffset2 = { x: config.offsetX2, y: config.offsetY2 };
+    
+    canvas.style.cursor = 'grabbing';
+  }
+
+  function dragMove(e) {
+    if (currentModule !== 'nameplate' || currentView !== 'top') return;
+    
+    const mouse = getMousePos(e);
+    
+    if (activeDragTarget) {
+      if (e.cancelable) {
+        e.preventDefault();
+      }
+      
+      const geom = getPlateGeometry();
+      const currentMouseMM = {
+        x: mouse.x / geom.s,
+        y: mouse.y / geom.s
+      };
+      
+      const dx = currentMouseMM.x - dragStartMouse.x;
+      const dy = dragStartMouse.y - currentMouseMM.y; // invert Y for CNC Y-up
+      
+      if (activeDragTarget === 'text1') {
+        const newX = Math.round((dragStartOffset.x + dx) * 10) / 10;
+        const newY = Math.round((dragStartOffset.y + dy) * 10) / 10;
+        
+        document.getElementById('npOffsetX').value = newX;
+        document.getElementById('npOffsetY').value = newY;
+      } else if (activeDragTarget === 'text2') {
+        const newX2 = Math.round((dragStartOffset2.x + dx) * 10) / 10;
+        const newY2 = Math.round((dragStartOffset2.y + dy) * 10) / 10;
+        
+        document.getElementById('npOffsetX2').value = newX2;
+        document.getElementById('npOffsetY2').value = newY2;
+      }
+      
+      updateCalcDisplay();
+    } else {
+      if (e.type === 'mousemove') {
+        const hit = hitTestText(mouse.x, mouse.y);
+        if (hit) {
+          canvas.style.cursor = 'grab';
+        } else {
+          canvas.style.cursor = 'default';
+        }
+      }
+    }
+  }
+
+  function endDrag() {
+    if (activeDragTarget) {
+      activeDragTarget = null;
+      canvas.style.cursor = 'default';
+      showToast('글자 오프셋 위치가 변경되었습니다.', 'info');
+    }
+  }
+
+  // Bind mouse and touch events to canvas/window
+  canvas.addEventListener('mousedown', startDrag);
+  canvas.addEventListener('touchstart', startDrag, { passive: true });
+
+  window.addEventListener('mousemove', dragMove);
+  window.addEventListener('touchmove', dragMove, { passive: false });
+
+  window.addEventListener('mouseup', endDrag);
+  window.addEventListener('touchend', endDrag);
+
   // ========== Initial Render ==========
   updatePresetDropdown();
   updateCalcDisplay();
