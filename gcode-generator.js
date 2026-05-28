@@ -759,12 +759,17 @@ class GCodeGenerator {
           });
           intersections.sort((a, b) => a - b);
           for (let i = 0; i < intersections.length - 1; i += 2) {
-            segments.push({
-              x1: intersections[i],
-              y1: y,
-              x2: intersections[i + 1],
-              y2: y
-            });
+            const x1 = intersections[i];
+            const x2 = intersections[i + 1];
+            // Filter out extremely short or zero-length segments (less than 0.02mm)
+            if (Math.abs(x2 - x1) >= 0.02) {
+              segments.push({
+                x1: x1,
+                y1: y,
+                x2: x2,
+                y2: y
+              });
+            }
           }
         }
       }
@@ -847,17 +852,28 @@ class GCodeGenerator {
         if (contour.length === 0) return;
         lines.push(`; Contour ${idx + 1}`);
 
+        let lastX = null;
+        let lastY = null;
+
         contour.forEach((pt, ptIdx) => {
+          const fx = fmt(pt.x);
+          const fy = fmt(pt.y);
           if (pt.type === 'M') {
             // Retract, move rapidly to start, and plunge
             lines.push(`G0 Z${fmt(safeZ)}`);
-            lines.push(`G0 X${fmt(pt.x)} Y${fmt(pt.y)}`);
+            lines.push(`G0 X${fx} Y${fy}`);
             lines.push(`G1 Z${fmt(currentZ)} F${plungeRate}`);
             addDist(pt.x, pt.y, currentZ);
+            lastX = pt.x;
+            lastY = pt.y;
           } else {
-            // Cut to point
-            lines.push(`G1 X${fmt(pt.x)} Y${fmt(pt.y)} F${feedRate}`);
-            addDist(pt.x, pt.y, currentZ);
+            // Filter out duplicate or zero-length moves (same coordinates under formatting)
+            if (fx !== fmt(lastX) || fy !== fmt(lastY)) {
+              lines.push(`G1 X${fx} Y${fy} F${feedRate}`);
+              addDist(pt.x, pt.y, currentZ);
+              lastX = pt.x;
+              lastY = pt.y;
+            }
           }
         });
       });
