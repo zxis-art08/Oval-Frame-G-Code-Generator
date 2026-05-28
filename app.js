@@ -14,7 +14,9 @@
   let currentGcodeTab = 'frame'; // 'frame' or 'template' (for oval)
 
   // ========== Google Fonts Paths (Local Primary, CDN Fallback) ==========
+  // ========== Google Fonts Paths (Local Primary, CDN Fallback) ==========
   const FONT_PATHS = {
+    // Offline priority fonts (Local asset files)
     NanumGothic: {
       local: 'fonts/NanumGothic-Regular.ttf',
       cdn: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/nanumgothic/NanumGothic-Regular.ttf'
@@ -34,6 +36,75 @@
     SpaceGrotesk: {
       local: 'fonts/SpaceGrotesk-Regular.ttf',
       cdn: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/spacegrotesk/SpaceGrotesk%5Bwght%5D.ttf'
+    },
+    // Online-only Google Fonts (Dynamic CDN load)
+    NotoSansKR: {
+      local: null,
+      cdn: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/notosanskr/NotoSansKR%5Bwght%5D.ttf'
+    },
+    NotoSerifKR: {
+      local: null,
+      cdn: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/notoserifkr/NotoSerifKR%5Bwght%5D.ttf'
+    },
+    NanumPenScript: {
+      local: null,
+      cdn: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/nanumpenscript/NanumPenScript-Regular.ttf'
+    },
+    NanumBrushScript: {
+      local: null,
+      cdn: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/nanumbrushscript/NanumBrushScript-Regular.ttf'
+    },
+    GowunDodum: {
+      local: null,
+      cdn: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/gowundodum/GowunDodum-Regular.ttf'
+    },
+    GowunBatang: {
+      local: null,
+      cdn: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/gowunbatang/GowunBatang-Regular.ttf'
+    },
+    Dongle: {
+      local: null,
+      cdn: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/dongle/Dongle-Regular.ttf'
+    },
+    SingleDay: {
+      local: null,
+      cdn: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/singleday/SingleDay-Regular.ttf'
+    },
+    SongMyung: {
+      local: null,
+      cdn: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/songmyung/SongMyung-Regular.ttf'
+    },
+    EastSeaDokdo: {
+      local: null,
+      cdn: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/eastseadokdo/EastSeaDokdo-Regular.ttf'
+    },
+    GamjaFlower: {
+      local: null,
+      cdn: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/gamjaflower/GamjaFlower-Regular.ttf'
+    },
+    DoHyeon: {
+      local: null,
+      cdn: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/dohyeon/DoHyeon-Regular.ttf'
+    },
+    YeonSung: {
+      local: null,
+      cdn: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/yeonsung/YeonSung-Regular.ttf'
+    },
+    PoorStory: {
+      local: null,
+      cdn: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/poorstory/PoorStory-Regular.ttf'
+    },
+    BagelFatOne: {
+      local: null,
+      cdn: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/bagelfatone/BagelFatOne-Regular.ttf'
+    },
+    Hahmlet: {
+      local: null,
+      cdn: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/hahmlet/Hahmlet%5Bwght%5D.ttf'
+    },
+    Orbit: {
+      local: null,
+      cdn: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/orbit/Orbit-Regular.ttf'
     }
   };
 
@@ -108,6 +179,25 @@
     const statusTextEl = document.getElementById('fontStatusText');
     statusEl.style.display = 'flex';
     statusTextEl.textContent = `글꼴 '${fontName}' 불러오는 중...`;
+
+    // If local path is null, bypass directly to CDN (Online-only google web font)
+    if (!paths.local) {
+      statusTextEl.textContent = `구글 CDN에서 '${fontName}' 다운로드 중...`;
+      return opentype.load(paths.cdn)
+        .then(font => {
+          loadedFonts[fontName] = font;
+          activeFont = font;
+          statusEl.style.display = 'none';
+          updateCalcDisplay();
+          showToast(`구글 웹폰트 '${fontName}' 다운로드 완료!`, 'success');
+          return font;
+        })
+        .catch(cdnErr => {
+          statusEl.style.display = 'none';
+          showToast(`구글 웹폰트 로드 실패! 인터넷 연결 상태를 확인하세요.`, 'error');
+          console.error(`Font load failed for ${fontName} from CDN:`, cdnErr);
+        });
+    }
 
     // Try loading local first, fallback to CDN if it fails
     return opentype.load(paths.local)

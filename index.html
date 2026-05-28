@@ -557,12 +557,35 @@
           <div class="text-tool-group" style="width: 140px;">
             <label for="npFont">글꼴 (Font)</label>
             <select id="npFont">
-              <option value="NanumGothic" selected>나눔고딕 (기본 한글)</option>
-              <option value="NanumMyeongjo">나눔명조 (명조체)</option>
-              <option value="Jua">주아체 (라운드)</option>
-              <option value="BlackHanSans">블랙한산스 (타이틀)</option>
-              <option value="SpaceGrotesk">Space Grotesk (영문)</option>
-              <option value="custom">-- 폰트 파일 업로드 --</option>
+              <optgroup label="오프라인 우선 글꼴 (공방/오프라인 가공 추천)">
+                <option value="NanumGothic" selected>나눔고딕 (기본 한글)</option>
+                <option value="NanumMyeongjo">나눔명조 (명조체)</option>
+                <option value="Jua">주아체 (라운드)</option>
+                <option value="BlackHanSans">블랙한산스 (굵은 타이틀)</option>
+                <option value="SpaceGrotesk">Space Grotesk (영문)</option>
+              </optgroup>
+              <optgroup label="구글 온라인 웹폰트 (인터넷 연결 필요)">
+                <option value="NotoSansKR">노토산스 KR (본문/깔끔)</option>
+                <option value="NotoSerifKR">노토세리프 KR (명조/단정)</option>
+                <option value="NanumPenScript">나눔손글씨 펜체</option>
+                <option value="NanumBrushScript">나눔손글씨 붓체</option>
+                <option value="GowunDodum">고운돋움 (둥글고 단정)</option>
+                <option value="GowunBatang">고운바탕 (손글씨 바탕체)</option>
+                <option value="Dongle">동글체 (조밀하고 둥글)</option>
+                <option value="SingleDay">싱글데이체 (손글씨체)</option>
+                <option value="SongMyung">송명체 (클래식 붓글씨)</option>
+                <option value="EastSeaDokdo">독도체 (거친 아웃라인)</option>
+                <option value="GamjaFlower">감자꽃체 (귀여운 손글씨)</option>
+                <option value="DoHyeon">도현체 (배민 굵은 서체)</option>
+                <option value="YeonSung">연성체 (배민 손글씨체)</option>
+                <option value="PoorStory">푸어스토리체 (정겨운 손글씨)</option>
+                <option value="BagelFatOne">베이글팻원체 (매우 통통)</option>
+                <option value="Hahmlet">함렛체 (세련된 서체)</option>
+                <option value="Orbit">오르빗체 (미래지향형)</option>
+              </optgroup>
+              <optgroup label="커스텀 글꼴">
+                <option value="custom">-- 폰트 파일 직접 업로드 --</option>
+              </optgroup>
             </select>
             <input type="file" id="fontFileInput" accept=".ttf,.otf" style="display: none;">
           </div>
