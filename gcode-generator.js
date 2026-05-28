@@ -718,6 +718,117 @@ class GCodeGenerator {
       });
     };
 
+    const getCncContoursByCharacter = (text, fontObj, size, ox, oy) => {
+      if (!text || !fontObj) return [];
+      
+      const entirePath = fontObj.getPath(text, 0, 0, size);
+      const bbox = entirePath.getBoundingBox();
+      const tx_c = (bbox.x1 + bbox.x2) / 2;
+      const ty_c = (bbox.y1 + bbox.y2) / 2;
+
+      const mapToCNC = (cx, cy) => {
+        const relX = cx - tx_c;
+        const relY = ty_c - cy; // Flip Y direction
+
+        if (config.originPosition === 'center') {
+          return {
+            x: relX + ox,
+            y: relY + oy
+          };
+        } else { // bottomleft
+          return {
+            x: (config.width / 2) + relX + ox,
+            y: (config.height / 2) + relY + oy
+          };
+        }
+      };
+
+      const scale = size / fontObj.unitsPerEm;
+      const glyphs = fontObj.stringToGlyphs(text);
+      let currentX = 0;
+      const characterDataList = [];
+
+      glyphs.forEach((glyph, index) => {
+        // Space doesn't have a visible path, but it advances currentX
+        const charPath = glyph.getPath(currentX, 0, size);
+        currentX += glyph.advanceWidth * scale;
+
+        // Parse commands into contours for this character
+        const contours = [];
+        let currentContour = [];
+        let curX = 0, curY = 0;
+        let startX = 0, startY = 0;
+
+        charPath.commands.forEach(cmd => {
+          if (cmd.type === 'M') {
+            if (currentContour.length > 0) {
+              contours.push(currentContour);
+            }
+            currentContour = [{ type: 'M', x: cmd.x, y: cmd.y }];
+            startX = cmd.x;
+            startY = cmd.y;
+            curX = cmd.x;
+            curY = cmd.y;
+          } else if (cmd.type === 'L') {
+            currentContour.push({ type: 'L', x: cmd.x, y: cmd.y });
+            curX = cmd.x;
+            curY = cmd.y;
+          } else if (cmd.type === 'Q') {
+            const segments = 8;
+            for (let i = 1; i <= segments; i++) {
+              const t = i / segments;
+              const mt = 1 - t;
+              const x = mt*mt*curX + 2*mt*t*cmd.x1 + t*t*cmd.x;
+              const y = mt*mt*curY + 2*mt*t*cmd.y1 + t*t*cmd.y;
+              currentContour.push({ type: 'L', x, y });
+            }
+            curX = cmd.x;
+            curY = cmd.y;
+          } else if (cmd.type === 'C') {
+            const segments = 12;
+            for (let i = 1; i <= segments; i++) {
+              const t = i / segments;
+              const mt = 1 - t;
+              const x = mt*mt*mt*curX + 3*mt*mt*t*cmd.x1 + 3*mt*t*t*cmd.x2 + t*t*t*cmd.x;
+              const y = mt*mt*mt*curY + 3*mt*mt*t*cmd.y1 + 3*mt*t*t*cmd.y2 + t*t*t*cmd.y;
+              currentContour.push({ type: 'L', x, y });
+            }
+            curX = cmd.x;
+            curY = cmd.y;
+          } else if (cmd.type === 'Z') {
+            currentContour.push({ type: 'L', x: startX, y: startY });
+            curX = startX;
+            curY = startY;
+          }
+        });
+
+        if (currentContour.length > 0) {
+          contours.push(currentContour);
+        }
+
+        if (contours.length > 0) {
+          // Convert contours to CNC space
+          const cncContours = contours.map(contour => {
+            return contour.map(cmd => {
+              const pt = mapToCNC(cmd.x, cmd.y);
+              return {
+                type: cmd.type,
+                x: pt.x,
+                y: pt.y
+              };
+            });
+          });
+
+          characterDataList.push({
+            char: glyph.unicode ? String.fromCharCode(glyph.unicode) : `glyph_${index}`,
+            contours: cncContours
+          });
+        }
+      });
+
+      return characterDataList;
+    };
+
     // Gather CNC contours & hatches for all enabled text tracks
     let cncContours = [];
     let hatchSegments = [];
@@ -827,58 +938,132 @@ class GCodeGenerator {
     const numZPasses = Math.ceil(engraveDepth / doc);
     lines.push(`; ========== OPERATION: TEXT ENGRAVING (${numZPasses} passes) ==========`);
 
-    for (let pass = 1; pass <= numZPasses; pass++) {
-      const currentZ = -Math.min(pass * doc, engraveDepth);
-      lines.push(`; --- Z pass ${pass}/${numZPasses} at Z=${fmt(currentZ)} ---`);
-
-      // 1. Infill Hatching (If infill mode active)
-      if (config.engraveMode === 'infill' && hatchSegments.length > 0) {
-        lines.push('; --- Hatch Infill ---');
-        hatchSegments.forEach((segment, idx) => {
-          lines.push(`G0 Z${fmt(safeZ)}`);
-          lines.push(`G0 X${fmt(segment.x1)} Y${fmt(segment.y1)}`);
-          lines.push(`G1 Z${fmt(currentZ)} F${plungeRate}`);
-          addDist(segment.x1, segment.y1, currentZ);
-
-          lines.push(`G1 X${fmt(segment.x2)} Y${fmt(segment.y2)} F${feedRate}`);
-          addDist(segment.x2, segment.y2, currentZ);
-        });
-        lines.push(`G0 Z${fmt(safeZ)}`);
+    if (config.letterByLetter && (config.text || config.text2)) {
+      // Character-by-character engraving (Optimized travel)
+      const allCharGroups = [];
+      if (config.text && font) {
+        allCharGroups.push(...getCncContoursByCharacter(config.text, font, config.fontSize, config.offsetX, config.offsetY));
+      }
+      if (config.enableText2 && config.text2 && (font2 || config.font2)) {
+        const activeF2 = font2 || config.font2;
+        allCharGroups.push(...getCncContoursByCharacter(config.text2, activeF2, config.fontSize2, config.offsetX2, config.offsetY2));
       }
 
-      // 2. Contour Clean / Trace Pass
-      lines.push('; --- Outline Contour ---');
-      cncContours.forEach((contour, idx) => {
-        if (contour.length === 0) return;
-        lines.push(`; Contour ${idx + 1}`);
+      allCharGroups.forEach((group, charIdx) => {
+        lines.push(`; --- Character: "${group.char}" (${charIdx + 1}/${allCharGroups.length}) ---`);
+        
+        let charHatches = [];
+        if (config.engraveMode === 'infill') {
+          charHatches = generateHatches(group.contours);
+        }
 
-        let lastX = null;
-        let lastY = null;
+        for (let pass = 1; pass <= numZPasses; pass++) {
+          const currentZ = -Math.min(pass * doc, engraveDepth);
+          lines.push(`; Z pass ${pass}/${numZPasses} at Z=${fmt(currentZ)}`);
 
-        contour.forEach((pt, ptIdx) => {
-          const fx = fmt(pt.x);
-          const fy = fmt(pt.y);
-          if (pt.type === 'M') {
-            // Retract, move rapidly to start, and plunge
+          // 1. Infill Hatching (If infill mode active)
+          if (config.engraveMode === 'infill' && charHatches.length > 0) {
+            lines.push('; Hatch Infill');
+            charHatches.forEach((segment, idx) => {
+              lines.push(`G0 Z${fmt(safeZ)}`);
+              lines.push(`G0 X${fmt(segment.x1)} Y${fmt(segment.y1)}`);
+              lines.push(`G1 Z${fmt(currentZ)} F${plungeRate}`);
+              addDist(segment.x1, segment.y1, currentZ);
+
+              lines.push(`G1 X${fmt(segment.x2)} Y${fmt(segment.y2)} F${feedRate}`);
+              addDist(segment.x2, segment.y2, currentZ);
+            });
             lines.push(`G0 Z${fmt(safeZ)}`);
-            lines.push(`G0 X${fx} Y${fy}`);
+          }
+
+          // 2. Contour Clean / Trace Pass
+          lines.push('; Outline Contour');
+          group.contours.forEach((contour, idx) => {
+            if (contour.length === 0) return;
+            lines.push(`; Contour ${idx + 1}`);
+
+            let lastX = null;
+            let lastY = null;
+
+            contour.forEach((pt, ptIdx) => {
+              const fx = fmt(pt.x);
+              const fy = fmt(pt.y);
+              if (pt.type === 'M') {
+                lines.push(`G0 Z${fmt(safeZ)}`);
+                lines.push(`G0 X${fx} Y${fy}`);
+                lines.push(`G1 Z${fmt(currentZ)} F${plungeRate}`);
+                addDist(pt.x, pt.y, currentZ);
+                lastX = pt.x;
+                lastY = pt.y;
+              } else {
+                if (fx !== fmt(lastX) || fy !== fmt(lastY)) {
+                  lines.push(`G1 X${fx} Y${fy} F${feedRate}`);
+                  addDist(pt.x, pt.y, currentZ);
+                  lastX = pt.x;
+                  lastY = pt.y;
+                }
+              }
+            });
+          });
+          lines.push(`G0 Z${fmt(safeZ)}`);
+        }
+        lines.push('');
+      });
+    } else {
+      // Original Layer-by-layer engraving (across all text together)
+      for (let pass = 1; pass <= numZPasses; pass++) {
+        const currentZ = -Math.min(pass * doc, engraveDepth);
+        lines.push(`; --- Z pass ${pass}/${numZPasses} at Z=${fmt(currentZ)} ---`);
+
+        // 1. Infill Hatching (If infill mode active)
+        if (config.engraveMode === 'infill' && hatchSegments.length > 0) {
+          lines.push('; --- Hatch Infill ---');
+          hatchSegments.forEach((segment, idx) => {
+            lines.push(`G0 Z${fmt(safeZ)}`);
+            lines.push(`G0 X${fmt(segment.x1)} Y${fmt(segment.y1)}`);
             lines.push(`G1 Z${fmt(currentZ)} F${plungeRate}`);
-            addDist(pt.x, pt.y, currentZ);
-            lastX = pt.x;
-            lastY = pt.y;
-          } else {
-            // Filter out duplicate or zero-length moves (same coordinates under formatting)
-            if (fx !== fmt(lastX) || fy !== fmt(lastY)) {
-              lines.push(`G1 X${fx} Y${fy} F${feedRate}`);
+            addDist(segment.x1, segment.y1, currentZ);
+
+            lines.push(`G1 X${fmt(segment.x2)} Y${fmt(segment.y2)} F${feedRate}`);
+            addDist(segment.x2, segment.y2, currentZ);
+          });
+          lines.push(`G0 Z${fmt(safeZ)}`);
+        }
+
+        // 2. Contour Clean / Trace Pass
+        lines.push('; --- Outline Contour ---');
+        cncContours.forEach((contour, idx) => {
+          if (contour.length === 0) return;
+          lines.push(`; Contour ${idx + 1}`);
+
+          let lastX = null;
+          let lastY = null;
+
+          contour.forEach((pt, ptIdx) => {
+            const fx = fmt(pt.x);
+            const fy = fmt(pt.y);
+            if (pt.type === 'M') {
+              // Retract, move rapidly to start, and plunge
+              lines.push(`G0 Z${fmt(safeZ)}`);
+              lines.push(`G0 X${fx} Y${fy}`);
+              lines.push(`G1 Z${fmt(currentZ)} F${plungeRate}`);
               addDist(pt.x, pt.y, currentZ);
               lastX = pt.x;
               lastY = pt.y;
+            } else {
+              // Filter out duplicate or zero-length moves (same coordinates under formatting)
+              if (fx !== fmt(lastX) || fy !== fmt(lastY)) {
+                lines.push(`G1 X${fx} Y${fy} F${feedRate}`);
+                addDist(pt.x, pt.y, currentZ);
+                lastX = pt.x;
+                lastY = pt.y;
+              }
             }
-          }
+          });
         });
-      });
-      lines.push(`G0 Z${fmt(safeZ)}`);
-      lines.push('');
+        lines.push(`G0 Z${fmt(safeZ)}`);
+        lines.push('');
+      }
     }
 
     // ========== FOOTER ==========

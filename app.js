@@ -142,6 +142,7 @@
       engraveDepth:      parseFloat(document.getElementById('npEngraveDepth').value) || 1.5,
       safeZ:             parseFloat(document.getElementById('npSafeZ').value) || 5.0,
       originPosition:    document.getElementById('npOriginPosition').value,
+      letterByLetter:    document.getElementById('npLetterByLetter').checked,
       // Text 1 options
       text:              document.getElementById('npText').value,
       fontName:          document.getElementById('npFont').value,
@@ -625,6 +626,7 @@
       document.getElementById('npEngraveDepth').value = 1.5;
       document.getElementById('npSafeZ').value = 5.0;
       document.getElementById('npOriginPosition').value = 'bottomleft';
+      document.getElementById('npLetterByLetter').checked = true;
 
       document.getElementById('npText').value = '김민수';
       document.getElementById('npFont').value = 'NanumGothic';
@@ -900,6 +902,7 @@
         npEngraveDepth: parseFloat(document.getElementById('npEngraveDepth').value),
         npSafeZ: parseFloat(document.getElementById('npSafeZ').value),
         npOriginPosition: document.getElementById('npOriginPosition').value,
+        npLetterByLetter: document.getElementById('npLetterByLetter').checked,
         npText: document.getElementById('npText').value,
         npFont: document.getElementById('npFont').value,
         npFontSize: parseFloat(document.getElementById('npFontSize').value),
@@ -985,6 +988,7 @@
         npEngraveDepth: config.engraveDepth,
         npSafeZ: config.safeZ,
         npOriginPosition: config.originPosition,
+        npLetterByLetter: config.letterByLetter,
         npText: config.text,
         npFont: config.fontName,
         npFontSize: config.fontSize,
