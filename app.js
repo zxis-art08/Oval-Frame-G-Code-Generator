@@ -319,11 +319,6 @@
     input.addEventListener('input', updateCalcDisplay);
   });
 
-  // Connect renderer orbit redraw trigger
-  renderer.redrawTrigger = () => {
-    const activeResult = currentGcodeTab === 'frame' ? lastResult.frame : lastResult.template;
-    renderer.render(getConfig(), currentView, activeResult);
-  };
 
   // ========== Presets System ==========
   const PRESET_KEY = 'oval_cam_presets';
