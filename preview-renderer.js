@@ -801,11 +801,15 @@ class PreviewRenderer {
         const rad = (config.bitAngle / 2) * Math.PI / 180;
         const cutWidth = 2 * config.engraveDepth * Math.tan(rad) + 2 * config.tipRadius;
 
-        // Stroke outline (actual cutter path representation)
+        // Stroke outline (actual cutter path representation in Trace mode, sharp boundary in Infill mode)
         ctx.strokeStyle = 'rgba(60, 255, 208, 0.95)';
-        ctx.lineWidth = Math.max(0.2, cutWidth); // show cutter thickness scaled
-        if (t.bold) {
-          ctx.lineWidth = Math.max(0.3, cutWidth * 1.5);
+        if (config.engraveMode === 'infill') {
+          ctx.lineWidth = t.bold ? 0.3 : 0.15;
+        } else {
+          ctx.lineWidth = Math.max(0.2, cutWidth);
+          if (t.bold) {
+            ctx.lineWidth = Math.max(0.3, cutWidth * 1.5);
+          }
         }
         ctx.stroke();
 
