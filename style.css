@@ -232,7 +232,7 @@ body {
 .app-main {
   display: grid;
   grid-template-columns: 340px 1fr 380px; /* slightly wider panels for modern typography */
-  height: calc(100vh - 64px);
+  height: calc(100vh - 64px - 48px);
   overflow: hidden;
 }
 
@@ -940,4 +940,134 @@ select,
   .gcode-viewer {
     max-height: 300px;
   }
+}
+
+/* ========================================
+   STUDIOHYUN CAM TOOL — Module Navigation
+   ======================================== */
+.module-nav {
+  display: flex;
+  background: var(--bg-canvas);
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 0 var(--space-xl);
+  height: 48px;
+  align-items: center;
+  gap: var(--space-lg);
+  position: relative;
+  z-index: 99;
+}
+
+.nav-item {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  cursor: pointer;
+  padding: 8px 16px;
+  border-radius: var(--radius-xs);
+  transition: all 180ms ease;
+  position: relative;
+  text-transform: uppercase;
+}
+
+.nav-item:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: var(--bg-surface);
+}
+
+.nav-item.active {
+  color: var(--accent-mint);
+}
+
+.nav-item.active::after {
+  content: '';
+  position: absolute;
+  bottom: -11px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent-mint);
+}
+
+.nav-item.disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+}
+
+/* ========================================
+   STUDIOHYUN CAM TOOL — Text Toolbar
+   ======================================== */
+.text-toolbar {
+  background: var(--bg-canvas);
+  border-bottom: 1px solid var(--border-subtle);
+  padding: var(--space-md) var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  z-index: 10;
+}
+
+.text-tool-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.text-tool-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.text-tool-group label {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.text-input-group {
+  flex: 1;
+  min-width: 200px;
+}
+
+/* Validation status colors */
+.report-status.status-danger {
+  color: #ef4444 !important;
+}
+
+.report-status.status-danger .status-dot {
+  background: #ef4444 !important;
+}
+
+.report-status.status-warning {
+  color: #f59e0b !important;
+}
+
+.report-status.status-warning .status-dot {
+  background: #f59e0b !important;
+}
+
+.report-status.status-safe {
+  color: var(--accent-mint) !important;
+}
+
+.report-status.status-safe .status-dot {
+  background: var(--accent-mint) !important;
+}
+
+/* Common utility classes */
+.hidden {
+  display: none !important;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.5; }
+  100% { opacity: 1; }
 }

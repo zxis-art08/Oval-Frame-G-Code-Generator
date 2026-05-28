@@ -3,20 +3,22 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="TwoTrees 450 CNC용 오벌 프레임 가공 NC 파일 자동 생성기">
-  <title>Oval Frame CAM — TwoTrees 450 CNC</title>
+  <meta name="description" content="TwoTrees 450 CNC용 가공 NC 파일 자동 생성기">
+  <title>STUDIOHYUN Cam Tool — TwoTrees 450 CNC</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;700;900&family=Space+Grotesk:wght@300;400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css?v=2.4">
+  <!-- opentype.js CDN library for font outlines parsing -->
+  <script src="https://cdn.jsdelivr.net/npm/opentype.js@1.3.4/dist/opentype.min.js"></script>
 </head>
 <body>
   <!-- Header -->
   <header class="app-header">
     <div class="header-inner">
       <div class="logo-group">
-        <h1 class="logo-title">OVAL FRAME CAM</h1>
-        <span class="logo-badge">TTC 450 PRO</span>
+        <h1 class="logo-title">STUDIOHYUN CAM TOOL</h1>
+        <span class="logo-badge" id="appModeBadge">OVAL FRAME</span>
       </div>
       <div class="header-actions">
         <button class="btn btn-outlined-mint" id="btnReset" title="RESET ALL SETTINGS">
@@ -27,11 +29,21 @@
     </div>
   </header>
 
+  <!-- Module Navigation -->
+  <nav class="module-nav" id="moduleNav">
+    <button class="nav-item active" data-module="oval">타원 액자 가공 (OVAL FRAME)</button>
+    <button class="nav-item" data-module="nameplate">명패 각인 가공 (NAMEPLATE)</button>
+    <button class="nav-item disabled" disabled title="추후 추가 예정">추가 가공 메뉴...</button>
+  </nav>
+
   <!-- Main Layout -->
   <main class="app-main">
     <!-- Left Panel — Settings -->
     <aside class="panel panel-settings" id="settingsPanel">
       <div class="story-stream-rail"></div>
+      
+      <!-- Oval Frame Settings Wrapper -->
+      <div id="ovalSettingsGroup">
       
       <!-- Section: Presets -->
       <section class="panel-section" id="sectionPresets">
@@ -303,6 +315,203 @@
           </div>
         </div>
       </section>
+      </div> <!-- End of ovalSettingsGroup -->
+
+      <!-- Nameplate Settings Wrapper -->
+      <div id="nameplateSettingsGroup" class="hidden">
+        <!-- Section: Nameplate Presets -->
+        <section class="panel-section" id="npSectionPresets">
+          <div class="section-header" data-toggle="npPresetContent">
+            <div class="section-badge-group">
+              <span class="section-kicker">PRESETS</span>
+              <h2 class="section-title">MANAGE PRESETS</h2>
+            </div>
+            <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+          </div>
+          <div class="section-content" id="npPresetContent">
+            <div class="input-group">
+              <label for="npPresetSelect">저장된 프리셋 불러오기</label>
+              <select id="npPresetSelect">
+                <option value="">-- 프리셋 선택 --</option>
+              </select>
+            </div>
+            <div class="input-group">
+              <label for="npPresetName">프리셋 이름</label>
+              <input type="text" id="npPresetName" placeholder="예: 원목 문패">
+            </div>
+            <div class="button-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
+              <button class="btn btn-ghost" id="btnNpSavePreset" style="justify-content: center; font-size: 0.8rem;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/></svg>
+                저장 / 덮어쓰기
+              </button>
+              <button class="btn btn-ghost" id="btnNpDeletePreset" style="justify-content: center; font-size: 0.8rem; color: var(--accent-red); border-color: rgba(248,113,113,0.2);">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                삭제
+              </button>
+            </div>
+            <div class="button-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+              <button class="btn btn-ghost" id="btnNpExportPreset" style="justify-content: center; font-size: 0.75rem; padding: 6px var(--space-sm);">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+                내보내기 (.json)
+              </button>
+              <label class="btn btn-ghost" style="justify-content: center; font-size: 0.75rem; cursor: pointer; margin: 0; padding: 6px var(--space-sm);">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+                가져오기
+                <input type="file" id="importNpPresetFile" accept=".json" style="display: none;">
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <!-- Section: Nameplate Dimensions -->
+        <section class="panel-section" id="npSectionDimensions">
+          <div class="section-header" data-toggle="npDimContent">
+            <div class="section-badge-group">
+              <span class="section-kicker">DIMENSIONS</span>
+              <h2 class="section-title">MATERIAL DIMENSIONS</h2>
+            </div>
+            <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+          </div>
+          <div class="section-content" id="npDimContent">
+            <div class="input-row">
+              <div class="input-group">
+                <label for="npWidth">가로 크기</label>
+                <div class="input-with-unit">
+                  <input type="number" id="npWidth" value="200" min="50" max="450" step="1">
+                  <span class="unit">mm</span>
+                </div>
+              </div>
+              <div class="input-group">
+                <label for="npHeight">세로 크기</label>
+                <div class="input-with-unit">
+                  <input type="number" id="npHeight" value="100" min="50" max="450" step="1">
+                  <span class="unit">mm</span>
+                </div>
+              </div>
+            </div>
+            <div class="input-group">
+              <label for="npThickness">소재 두께 (Thickness)</label>
+              <div class="input-with-unit">
+                <input type="number" id="npThickness" value="10" min="2" max="50" step="0.5">
+                <span class="unit">mm</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Section: Nameplate Tooling -->
+        <section class="panel-section" id="npSectionTooling">
+          <div class="section-header" data-toggle="npToolContent">
+            <div class="section-badge-group">
+              <span class="section-kicker">TOOLING</span>
+              <h2 class="section-title">MATERIAL & CUTTER</h2>
+            </div>
+            <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+          </div>
+          <div class="section-content" id="npToolContent">
+            <div class="input-group">
+              <label for="npWoodType">목재 종류</label>
+              <select id="npWoodType">
+                <option value="softwood">연목 (소나무, 삼나무 등)</option>
+                <option value="hardwood" selected>경목 (참나무, 호두나무 등)</option>
+                <option value="mdf">MDF</option>
+                <option value="plywood">합판</option>
+              </select>
+            </div>
+            <div class="input-row">
+              <div class="input-group">
+                <label for="npToolDiameter">공구 직경 (엔드밀)</label>
+                <div class="input-with-unit">
+                  <input type="number" id="npToolDiameter" value="2" min="0.5" max="7" step="0.1">
+                  <span class="unit">mm</span>
+                </div>
+              </div>
+              <div class="input-group">
+                <label for="npToolFlutes">날 수 (Flutes)</label>
+                <select id="npToolFlutes">
+                  <option value="1">1날</option>
+                  <option value="2" selected>2날</option>
+                  <option value="3">3날</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Section: Nameplate Settings -->
+        <section class="panel-section" id="npSectionMachine">
+          <div class="section-header" data-toggle="npMachineContent">
+            <div class="section-badge-group">
+              <span class="section-kicker">PARAMETERS</span>
+              <h2 class="section-title">ENGRAVING SETTINGS</h2>
+            </div>
+            <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+          </div>
+          <div class="section-content" id="npMachineContent">
+            <div class="input-group">
+              <label for="npCncModel">CNC 모델</label>
+              <select id="npCncModel">
+                <option value="ttc450">TTC 450 (775 스핀들, 80W)</option>
+                <option value="ttc450pro" selected>TTC 450 Pro (500W)</option>
+                <option value="ttc450ultra">TTC 450 Ultra (500W)</option>
+              </select>
+            </div>
+            <div class="info-badge">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+              <span id="npMachineInfo">작업 영역: 460×460mm / 최대 RPM: 12,000 / 최대 이송: 5,000 mm/min</span>
+            </div>
+            
+            <div class="input-row">
+              <div class="input-group">
+                <label for="npEngraveDepth">각인 깊이</label>
+                <div class="input-with-unit">
+                  <input type="number" id="npEngraveDepth" value="1.5" min="0.1" max="20" step="0.1">
+                  <span class="unit">mm</span>
+                </div>
+              </div>
+              <div class="input-group">
+                <label for="npSafeZ">안전 높이 (Safe Z)</label>
+                <div class="input-with-unit">
+                  <input type="number" id="npSafeZ" value="5.0" min="1" max="20" step="0.5">
+                  <span class="unit">mm</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="input-group">
+              <label for="npOriginPosition">원점 위치</label>
+              <select id="npOriginPosition">
+                <option value="center">소재 중앙</option>
+                <option value="bottomleft" selected>좌측 하단</option>
+              </select>
+            </div>
+
+            <!-- Auto-calculated values display -->
+            <div class="calculated-params">
+              <span class="calc-kicker">AUTO-CALCULATED</span>
+              <h3 class="calc-title">PROCESS PARAMETERS</h3>
+              <div class="calc-grid">
+                <div class="calc-item">
+                  <span class="calc-label">스핀들 RPM</span>
+                  <span class="calc-value" id="calcNpRPM">12,000</span>
+                </div>
+                <div class="calc-item">
+                  <span class="calc-label">이송 속도 (Feed)</span>
+                  <span class="calc-value" id="calcNpFeed">1,200 mm/min</span>
+                </div>
+                <div class="calc-item">
+                  <span class="calc-label">절입 깊이 (DOC)</span>
+                  <span class="calc-value" id="calcNpDOC">0.8 mm</span>
+                </div>
+                <div class="calc-item">
+                  <span class="calc-label">하강 속도 (Plunge)</span>
+                  <span class="calc-value" id="calcNpPlunge">400 mm/min</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div> <!-- End of nameplateSettingsGroup -->
     </aside>
 
     <!-- Center — Canvas Preview -->
@@ -318,6 +527,76 @@
           </button>
         </div>
       </div>
+
+      <!-- Text Editing Toolbar (Only visible in Nameplate Mode) -->
+      <div class="text-toolbar hidden" id="textToolbar">
+        <div class="text-tool-row">
+          <div class="text-tool-group text-input-group">
+            <label for="npText">각인 텍스트</label>
+            <input type="text" id="npText" value="STUDIO HYUN" placeholder="각인할 문구를 입력하세요.">
+          </div>
+          <div class="text-tool-group" style="width: 140px;">
+            <label for="npFont">글꼴 (Font)</label>
+            <select id="npFont">
+              <option value="NanumGothic" selected>나눔고딕 (기본 한글)</option>
+              <option value="NanumMyeongjo">나눔명조 (명조체)</option>
+              <option value="Jua">주아체 (라운드)</option>
+              <option value="BlackHanSans">블랙한산스 (타이틀)</option>
+              <option value="SpaceGrotesk">Space Grotesk (영문)</option>
+              <option value="custom">-- 폰트 파일 업로드 --</option>
+            </select>
+            <input type="file" id="fontFileInput" accept=".ttf,.otf" style="display: none;">
+          </div>
+          <button class="btn btn-ghost btn-sm" id="btnUploadFont" style="padding: 6px 12px; margin-top: 18px; font-size: 0.72rem; border-radius: var(--radius-xs);">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+            업로드
+          </button>
+        </div>
+        <div class="text-tool-row" style="margin-top: 8px;">
+          <div class="text-tool-group" style="width: 75px;">
+            <label for="npFontSize">크기</label>
+            <div class="input-with-unit">
+              <input type="number" id="npFontSize" value="25" min="5" max="150" step="1">
+              <span class="unit">mm</span>
+            </div>
+          </div>
+          <div class="text-tool-group" style="width: 100px;">
+            <label for="npTextAlign">정렬</label>
+            <select id="npTextAlign">
+              <option value="left">왼쪽</option>
+              <option value="center" selected>가운데</option>
+              <option value="right">오른쪽</option>
+            </select>
+          </div>
+          <div class="text-tool-group" style="width: 70px;">
+            <label for="npOffsetX">X 이동</label>
+            <div class="input-with-unit">
+              <input type="number" id="npOffsetX" value="0" min="-200" max="200" step="1">
+              <span class="unit">mm</span>
+            </div>
+          </div>
+          <div class="text-tool-group" style="width: 70px;">
+            <label for="npOffsetY">Y 이동</label>
+            <div class="input-with-unit">
+              <input type="number" id="npOffsetY" value="0" min="-200" max="200" step="1">
+              <span class="unit">mm</span>
+            </div>
+          </div>
+          <div class="text-tool-group" style="display: flex; align-items: flex-end; margin-bottom: 2px;">
+            <label class="checkbox-label" style="margin: 0; padding-bottom: 6px;">
+              <input type="checkbox" id="npFontBold">
+              <span class="checkbox-custom"></span>
+              굵게
+            </label>
+          </div>
+        </div>
+        <!-- Status indicator for font loading -->
+        <div class="font-status" id="fontStatus" style="font-family: var(--font-mono); font-size: 0.7rem; color: var(--accent-mint); margin-top: 6px; display: none; align-items: center; gap: 6px;">
+          <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent-mint); animation: pulse 1s infinite alternate;"></span>
+          <span id="fontStatusText">폰트 로드 중...</span>
+        </div>
+      </div>
+
       <div class="canvas-container" id="canvasContainer">
         <canvas id="previewCanvas"></canvas>
         <div class="canvas-info" id="canvasInfo">
@@ -343,7 +622,7 @@
       </div>
       
       <!-- Sub Tabs for Frame vs Template G-code -->
-      <div class="gcode-tabs" style="display: flex; gap: 8px; padding: 8px 16px; border-bottom: 1px solid var(--border-subtle); background: var(--bg-canvas);">
+      <div class="gcode-tabs" id="gcodeTabsContainer" style="display: flex; gap: 8px; padding: 8px 16px; border-bottom: 1px solid var(--border-subtle); background: var(--bg-canvas);">
         <button class="btn btn-outlined-mint active" id="tabGcodeFrame" style="padding: 6px 12px; font-size: 0.72rem; border-radius: var(--radius-xs); letter-spacing: 1px; font-family: var(--font-mono);">FRAME G-CODE</button>
         <button class="btn btn-outlined-mint" id="tabGcodeTemplate" style="padding: 6px 12px; font-size: 0.72rem; border-radius: var(--radius-xs); letter-spacing: 1px; font-family: var(--font-mono);">TEMPLATE (GADA)</button>
       </div>
@@ -366,12 +645,29 @@
           <span class="stat-value" id="statDistance">—</span>
         </div>
       </div>
+
+      <!-- Safety Validation Report -->
+      <div class="validation-report" id="validationReport" style="padding: 12px 16px; border-top: 1px solid var(--border-subtle); background: var(--bg-canvas);">
+        <span class="report-kicker" style="font-family: var(--font-mono); font-size: 0.65rem; color: var(--text-secondary); letter-spacing: 1.5px; display: block; margin-bottom: 4px; text-transform: uppercase;">SAFETY VERIFICATION</span>
+        <div class="report-box" id="reportBox" style="display: flex; flex-direction: column; gap: var(--space-xs);">
+          <div class="report-status status-safe" id="reportStatus" style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 700; color: var(--accent-mint);">
+            <span class="status-dot" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent-mint);"></span>
+            <span id="reportStatusText">각인 가공 가능 (대기 중)</span>
+          </div>
+          <div class="report-details" id="reportDetails" style="font-size: 0.78rem; color: var(--text-secondary); line-height: 1.45; font-family: var(--font-sans);">
+            설정을 조정한 후 "G-CODE 생성" 버튼을 클릭하면 안전성 검사 리포트가 여기에 생성됩니다.
+          </div>
+        </div>
+      </div>
+
       <div class="output-footer">
-        <button class="btn btn-primary btn-lg" id="btnGenerate">
+        <button class="btn btn-primary btn-lg" id="btnGenerate" style="justify-content: center; width: 100%;">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-          GENERATE G-CODE SET
+          <span id="btnGenerateText">GENERATE G-CODE SET</span>
         </button>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+        
+        <!-- Oval Download Buttons -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;" id="ovalDownloadButtons">
           <button class="btn btn-accent btn-lg" id="btnDownload" disabled style="font-size: 0.75rem; justify-content: center; padding: 10px 12px;">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
             DOWNLOAD FRAME
@@ -379,6 +675,14 @@
           <button class="btn btn-outlined-mint btn-lg" id="btnDownloadTemplate" disabled style="font-size: 0.75rem; justify-content: center; padding: 10px 12px; opacity: 0.25; cursor: not-allowed;">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
             DOWNLOAD GADA
+          </button>
+        </div>
+
+        <!-- Nameplate Download Button -->
+        <div id="nameplateDownloadButtons" class="hidden">
+          <button class="btn btn-accent btn-lg" id="btnDownloadNameplate" disabled style="width: 100%; font-size: 0.78rem; justify-content: center; padding: 10px 12px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            DOWNLOAD NAMEPLATE NC
           </button>
         </div>
       </div>

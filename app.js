@@ -1,5 +1,6 @@
 /**
- * App Controller — Wires UI to generator and renderer
+ * App Controller — STUDIOHYUN Cam Tool
+ * Wires UI, Preview Renderer, and G-code Generator
  */
 
 (function() {
@@ -7,12 +8,29 @@
   const canvas = document.getElementById('previewCanvas');
   const renderer = new PreviewRenderer(canvas);
 
+  let currentModule = 'oval'; // 'oval' or 'nameplate'
   let currentView = 'top';
-  let lastResult = { frame: null, template: null };
-  let currentGcodeTab = 'frame'; // 'frame' or 'template'
+  let lastResult = { frame: null, template: null, nameplate: null };
+  let currentGcodeTab = 'frame'; // 'frame' or 'template' (for oval)
+
+  // ========== Google Fonts & CDN Paths ==========
+  const FONT_URLS = {
+    NanumGothic: 'https://cdn.jsdelivr.net/gh/naver/nanumfont@master/NanumGothic.ttf',
+    NanumMyeongjo: 'https://cdn.jsdelivr.net/gh/naver/nanumfont@master/NanumMyeongjo.ttf',
+    Jua: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/jua/Jua-Regular.ttf',
+    BlackHanSans: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/blackhansans/BlackHanSans-Regular.ttf',
+    SpaceGrotesk: 'https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/spacegrotesk/SpaceGrotesk%5Bwght%5D.ttf'
+  };
+
+  let loadedFonts = {};
+  let activeFont = null;
+
+  // ========== Preset Storage Keys ==========
+  const OVAL_PRESET_KEY = 'oval_cam_presets';
+  const NP_PRESET_KEY = 'nameplate_cam_presets';
 
   // ========== Config Gathering ==========
-  function getConfig() {
+  function getOvalConfig() {
     return {
       ovalWidth:         parseFloat(document.getElementById('ovalWidth').value) || 300,
       ovalHeight:        parseFloat(document.getElementById('ovalHeight').value) || 400,
@@ -35,29 +53,157 @@
     };
   }
 
-  // ========== Update Calculated Params Display ==========
-  function updateCalcDisplay() {
-    const config = getConfig();
-    const params = generator.calculateParams(config);
-    
-    document.getElementById('calcRPM').textContent = params.rpm.toLocaleString();
-    document.getElementById('calcFeed').textContent = `${params.feedRate.toLocaleString()} mm/min`;
-    document.getElementById('calcDOC').textContent = `${params.doc} mm`;
-    document.getElementById('calcPlunge').textContent = `${params.plungeRate.toLocaleString()} mm/min`;
-    document.getElementById('calcStepover').textContent = `${params.stepover} mm (${Math.round(params.stepover / config.toolDiameter * 100)}%)`;
-    document.getElementById('calcSafeZ').textContent = `${params.safeZ} mm`;
-
-    // Machine info
-    const spec = params.spec;
-    document.getElementById('machineInfo').textContent = 
-      `작업 영역: ${spec.workArea[0]}×${spec.workArea[1]}mm / 최대 RPM: ${spec.maxRPM.toLocaleString()} / 최대 이송: ${spec.maxFeed.toLocaleString()} mm/min`;
-
-    // Update preview (use active result for toolpath view)
-    const activeResult = currentGcodeTab === 'frame' ? lastResult.frame : lastResult.template;
-    renderer.render(config, currentView, activeResult);
+  function getNameplateConfig() {
+    return {
+      width:             parseFloat(document.getElementById('npWidth').value) || 200,
+      height:            parseFloat(document.getElementById('npHeight').value) || 100,
+      thickness:         parseFloat(document.getElementById('npThickness').value) || 10,
+      woodType:          document.getElementById('npWoodType').value,
+      toolDiameter:      parseFloat(document.getElementById('npToolDiameter').value) || 2.0,
+      toolFlutes:        parseInt(document.getElementById('npToolFlutes').value) || 2,
+      cncModel:          document.getElementById('npCncModel').value,
+      engraveDepth:      parseFloat(document.getElementById('npEngraveDepth').value) || 1.5,
+      safeZ:             parseFloat(document.getElementById('npSafeZ').value) || 5.0,
+      originPosition:    document.getElementById('npOriginPosition').value,
+      // Text options
+      text:              document.getElementById('npText').value,
+      fontName:          document.getElementById('npFont').value,
+      fontSize:          parseFloat(document.getElementById('npFontSize').value) || 25,
+      textAlign:         document.getElementById('npTextAlign').value || 'center',
+      offsetX:           parseFloat(document.getElementById('npOffsetX').value) || 0,
+      offsetY:           parseFloat(document.getElementById('npOffsetY').value) || 0,
+      bold:              document.getElementById('npFontBold').checked
+    };
   }
 
-  // ========== Section Toggle ==========
+  // ========== Dynamic Font Loading ==========
+  function loadFont(fontName) {
+    if (loadedFonts[fontName]) {
+      activeFont = loadedFonts[fontName];
+      updateCalcDisplay();
+      return Promise.resolve(activeFont);
+    }
+
+    const url = FONT_URLS[fontName];
+    if (!url) return Promise.reject('Invalid font name');
+
+    const statusEl = document.getElementById('fontStatus');
+    const statusTextEl = document.getElementById('fontStatusText');
+    statusEl.style.display = 'flex';
+    statusTextEl.textContent = `구글 폰트 '${fontName}' 다운로드 중...`;
+
+    return opentype.load(url)
+      .then(font => {
+        loadedFonts[fontName] = font;
+        activeFont = font;
+        statusEl.style.display = 'none';
+        updateCalcDisplay();
+        showToast(`폰트 '${fontName}' 불러오기 완료!`, 'success');
+        return font;
+      })
+      .catch(err => {
+        statusEl.style.display = 'none';
+        showToast(`폰트 로드 실패! 로컬 폰트를 업로드하여 가공할 수 있습니다.`, 'error');
+        console.error(err);
+      });
+  }
+
+  // ========== Update Calculated Params & Preview ==========
+  function updateCalcDisplay() {
+    if (currentModule === 'oval') {
+      const config = getOvalConfig();
+      const params = generator.calculateParams(config);
+      
+      document.getElementById('calcRPM').textContent = params.rpm.toLocaleString();
+      document.getElementById('calcFeed').textContent = `${params.feedRate.toLocaleString()} mm/min`;
+      document.getElementById('calcDOC').textContent = `${params.doc} mm`;
+      document.getElementById('calcPlunge').textContent = `${params.plungeRate.toLocaleString()} mm/min`;
+      document.getElementById('calcStepover').textContent = `${params.stepover} mm (${Math.round(params.stepover / config.toolDiameter * 100)}%)`;
+      document.getElementById('calcSafeZ').textContent = `${params.safeZ} mm`;
+
+      const spec = params.spec;
+      document.getElementById('machineInfo').textContent = 
+        `작업 영역: ${spec.workArea[0]}×${spec.workArea[1]}mm / 최대 RPM: ${spec.maxRPM.toLocaleString()} / 최대 이송: ${spec.maxFeed.toLocaleString()} mm/min`;
+
+      const activeResult = currentGcodeTab === 'frame' ? lastResult.frame : lastResult.template;
+      renderer.render(config, currentView, activeResult);
+    } else {
+      const config = getNameplateConfig();
+      // Gather machining params (simulating calculateParams using diameter & wood type)
+      const params = generator.calculateParams({
+        cncModel: config.cncModel,
+        toolDiameter: config.toolDiameter,
+        toolFlutes: config.toolFlutes,
+        woodType: config.woodType
+      });
+
+      document.getElementById('calcNpRPM').textContent = params.rpm.toLocaleString();
+      document.getElementById('calcNpFeed').textContent = `${params.feedRate.toLocaleString()} mm/min`;
+      document.getElementById('calcNpDOC').textContent = `${params.doc} mm`;
+      document.getElementById('calcNpPlunge').textContent = `${params.plungeRate.toLocaleString()} mm/min`;
+
+      const spec = params.spec;
+      document.getElementById('npMachineInfo').textContent = 
+        `작업 영역: ${spec.workArea[0]}×${spec.workArea[1]}mm / 최대 RPM: ${spec.maxRPM.toLocaleString()} / 최대 이송: ${spec.maxFeed.toLocaleString()} mm/min`;
+
+      // Pass font outline to renderer
+      config.font = activeFont;
+      renderer.render(config, currentView, lastResult.nameplate);
+    }
+  }
+
+  // ========== Module Tabs Navigation ==========
+  const navItems = document.querySelectorAll('.nav-item');
+  navItems.forEach(item => {
+    item.addEventListener('click', () => {
+      if (item.disabled) return;
+      navItems.forEach(i => i.classList.remove('active'));
+      item.classList.add('active');
+      currentModule = item.getAttribute('data-module');
+
+      const ovalGroup = document.getElementById('ovalSettingsGroup');
+      const npGroup = document.getElementById('nameplateSettingsGroup');
+      const textToolbar = document.getElementById('textToolbar');
+      const gcodeTabsContainer = document.getElementById('gcodeTabsContainer');
+      const ovalDownloads = document.getElementById('ovalDownloadButtons');
+      const npDownloads = document.getElementById('nameplateDownloadButtons');
+      const appModeBadge = document.getElementById('appModeBadge');
+      const btnGenerateText = document.getElementById('btnGenerateText');
+
+      if (currentModule === 'oval') {
+        ovalGroup.classList.remove('hidden');
+        npGroup.classList.add('hidden');
+        textToolbar.classList.add('hidden');
+        gcodeTabsContainer.classList.remove('hidden');
+        ovalDownloads.classList.remove('hidden');
+        npDownloads.classList.add('hidden');
+        appModeBadge.textContent = 'OVAL FRAME';
+        btnGenerateText.textContent = 'GENERATE G-CODE SET';
+      } else {
+        ovalGroup.classList.add('hidden');
+        npGroup.classList.remove('hidden');
+        textToolbar.classList.remove('hidden');
+        gcodeTabsContainer.classList.add('hidden');
+        ovalDownloads.classList.add('hidden');
+        npDownloads.classList.remove('hidden');
+        appModeBadge.textContent = 'NAMEPLATE';
+        btnGenerateText.textContent = 'GENERATE NAMEPLATE G-CODE';
+
+        // Load font on active module switch if not loaded
+        if (!activeFont) {
+          const fontVal = document.getElementById('npFont').value;
+          loadFont(fontVal);
+        }
+      }
+
+      // Update preset dropdown for current module
+      updatePresetDropdown();
+      updateCalcDisplay();
+      displayGcodeResult();
+    });
+  });
+
+  // ========== Section Toggle Collapse/Expand ==========
   document.querySelectorAll('.section-header').forEach(header => {
     header.addEventListener('click', () => {
       const targetId = header.getAttribute('data-toggle');
@@ -70,31 +216,49 @@
     });
   });
 
-  // ========== Preview Tabs ==========
+  // ========== Canvas View Tabs (Top View vs Toolpath) ==========
   document.querySelectorAll('.preview-tab').forEach(tab => {
     tab.addEventListener('click', () => {
       document.querySelectorAll('.preview-tab').forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
       currentView = tab.getAttribute('data-view');
-      const activeResult = currentGcodeTab === 'frame' ? lastResult.frame : lastResult.template;
-      renderer.render(getConfig(), currentView, activeResult);
+      updateCalcDisplay();
     });
   });
 
+  function setPreviewTabActive(viewType) {
+    document.querySelectorAll('.preview-tab').forEach(t => {
+      if (t.getAttribute('data-view') === viewType) {
+        t.classList.add('active');
+      } else {
+        t.classList.remove('active');
+      }
+    });
+  }
+
   // ========== Zoom Fit ==========
   document.getElementById('btnZoomFit').addEventListener('click', () => {
-    const activeResult = currentGcodeTab === 'frame' ? lastResult.frame : lastResult.template;
-    renderer.render(getConfig(), currentView, activeResult);
+    updateCalcDisplay();
   });
 
   // ========== Render G-code and Stats tab helper ==========
   function displayGcodeResult() {
-    const activeResult = currentGcodeTab === 'frame' ? lastResult.frame : lastResult.template;
+    let activeResult = null;
+    if (currentModule === 'oval') {
+      activeResult = currentGcodeTab === 'frame' ? lastResult.frame : lastResult.template;
+    } else {
+      activeResult = lastResult.nameplate;
+    }
+
     if (!activeResult || !activeResult.gcode) {
       document.getElementById('gcodeOutput').innerHTML = `<code>; NC 코드가 여기에 표시됩니다.\n; 설정을 조정한 후 "NC 파일 생성" 버튼을 클릭하세요.</code>`;
       document.getElementById('statLines').textContent = '—';
       document.getElementById('statTime').textContent = '—';
       document.getElementById('statDistance').textContent = '—';
+      
+      if (currentModule === 'nameplate') {
+        updateValidationReport(null);
+      }
       return;
     }
 
@@ -110,9 +274,13 @@
       document.getElementById('statTime').textContent = `${Math.round(mins)}분`;
     }
     document.getElementById('statDistance').textContent = `${(activeResult.totalDistance / 1000).toFixed(1)} m`;
+
+    if (currentModule === 'nameplate') {
+      updateValidationReport(activeResult.safetyReport);
+    }
   }
 
-  // ========== G-code Sub Tabs Switcher ==========
+  // ========== G-code Sub Tabs Switcher (Only for Oval) ==========
   const tabFrame = document.getElementById('tabGcodeFrame');
   const tabTemplate = document.getElementById('tabGcodeTemplate');
 
@@ -121,7 +289,7 @@
     tabTemplate.classList.remove('active');
     currentGcodeTab = 'frame';
     displayGcodeResult();
-    renderer.render(getConfig(), currentView, lastResult.frame);
+    updateCalcDisplay();
   });
 
   tabTemplate.addEventListener('click', () => {
@@ -129,83 +297,120 @@
     tabFrame.classList.remove('active');
     currentGcodeTab = 'template';
     displayGcodeResult();
-    renderer.render(getConfig(), currentView, lastResult.template);
+    updateCalcDisplay();
   });
 
-  // ========== Generate Set (Frame & Gada Template) ==========
+  // ========== G-code Generation Event ==========
   document.getElementById('btnGenerate').addEventListener('click', () => {
-    const config = getConfig();
     const btn = document.getElementById('btnGenerate');
     btn.classList.add('generating');
     btn.disabled = true;
 
-    // Simulate brief processing
     setTimeout(() => {
-      // Parallel generation
-      const frameRes = generator.generate(config);
-      const templateRes = generator.generateTemplate(config);
-      
-      btn.classList.remove('generating');
-      btn.disabled = false;
+      if (currentModule === 'oval') {
+        const config = getOvalConfig();
+        const frameRes = generator.generate(config);
+        const templateRes = generator.generateTemplate(config);
+        
+        btn.classList.remove('generating');
+        btn.disabled = false;
 
-      if (frameRes.error) {
-        showToast(frameRes.error, 'error');
-        return;
+        if (frameRes.error) {
+          showToast(frameRes.error, 'error');
+          return;
+        }
+        if (templateRes.error) {
+          showToast(templateRes.error, 'error');
+          return;
+        }
+
+        lastResult.frame = frameRes;
+        lastResult.template = templateRes;
+
+        displayGcodeResult();
+
+        // Enable download buttons
+        document.getElementById('btnDownload').disabled = false;
+        const btnDlTemp = document.getElementById('btnDownloadTemplate');
+        btnDlTemp.disabled = false;
+        btnDlTemp.style.opacity = '1';
+        btnDlTemp.style.cursor = 'pointer';
+
+        // Switch to toolpath view
+        setPreviewTabActive('toolpath');
+        currentView = 'toolpath';
+        updateCalcDisplay();
+
+        showToast(`액자 및 유리 가다용 NC 파일 세트 생성 완료!`, 'success');
+      } else {
+        // Nameplate Mode G-code Generation
+        if (!activeFont) {
+          btn.classList.remove('generating');
+          btn.disabled = false;
+          showToast('폰트 파일을 불러오는 중입니다. 잠시 후 다시 시도하세요.', 'error');
+          return;
+        }
+
+        const config = getNameplateConfig();
+        const result = generator.generateNameplate(config, activeFont);
+
+        btn.classList.remove('generating');
+        btn.disabled = false;
+
+        if (result.error) {
+          showToast(result.error, 'error');
+          // Update safety report to danger if blocked
+          if (result.safetyReport) {
+            updateValidationReport(result.safetyReport);
+          }
+          return;
+        }
+
+        lastResult.nameplate = result;
+        displayGcodeResult();
+
+        // Enable nameplate download button
+        document.getElementById('btnDownloadNameplate').disabled = false;
+
+        // Switch to toolpath view
+        setPreviewTabActive('toolpath');
+        currentView = 'toolpath';
+        updateCalcDisplay();
+
+        showToast(`명패 각인용 NC 파일 생성 완료!`, 'success');
       }
-      if (templateRes.error) {
-        showToast(templateRes.error, 'error');
-        return;
-      }
-
-      lastResult.frame = frameRes;
-      lastResult.template = templateRes;
-
-      // Update current displayed G-code
-      displayGcodeResult();
-
-      // Enable download buttons & restore template btn style
-      const btnDl = document.getElementById('btnDownload');
-      const btnDlTemp = document.getElementById('btnDownloadTemplate');
-      
-      btnDl.disabled = false;
-      btnDlTemp.disabled = false;
-      btnDlTemp.style.opacity = '1';
-      btnDlTemp.style.cursor = 'pointer';
-
-      // Switch to toolpath view
-      document.querySelectorAll('.preview-tab').forEach(t => t.classList.remove('active'));
-      document.getElementById('tabToolpath').classList.add('active');
-      currentView = 'toolpath';
-      const activeResult = currentGcodeTab === 'frame' ? lastResult.frame : lastResult.template;
-      renderer.render(config, 'toolpath', activeResult);
-
-      showToast(`액자 및 유리 가다용 NC 파일 세트 생성 완료!`, 'success');
     }, 300);
   });
 
-  // ========== Download Frame G-code ==========
+  // ========== Download Click Actions ==========
   document.getElementById('btnDownload').addEventListener('click', () => {
     if (!lastResult.frame || !lastResult.frame.gcode) return;
-    const config = getConfig();
+    const config = getOvalConfig();
     const filename = `oval_frame_${config.ovalWidth}x${config.ovalHeight}.nc`;
-    const blob = new Blob([lastResult.frame.gcode], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    downloadFile(lastResult.frame.gcode, filename);
     showToast(`액자 가공용 파일 (${filename}) 다운로드 완료!`, 'success');
   });
 
-  // ========== Download Gada Template G-code ==========
   document.getElementById('btnDownloadTemplate').addEventListener('click', () => {
     if (!lastResult.template || !lastResult.template.gcode) return;
-    const config = getConfig();
+    const config = getOvalConfig();
     const filename = `oval_template_gada_${config.ovalWidth}x${config.ovalHeight}.nc`;
-    const blob = new Blob([lastResult.template.gcode], { type: 'text/plain' });
+    downloadFile(lastResult.template.gcode, filename);
+    showToast(`유리 가다용 파일 (${filename}) 다운로드 완료!`, 'success');
+  });
+
+  document.getElementById('btnDownloadNameplate').addEventListener('click', () => {
+    if (!lastResult.nameplate || !lastResult.nameplate.gcode) return;
+    const config = getNameplateConfig();
+    // Sanitize text for filename
+    const cleanText = config.text.replace(/[^a-zA-Z0-9가-힣_-]/g, '_').substring(0, 15);
+    const filename = `nameplate_${cleanText}_${config.width}x${config.height}.nc`;
+    downloadFile(lastResult.nameplate.gcode, filename);
+    showToast(`명패 각인용 파일 (${filename}) 다운로드 완료!`, 'success');
+  });
+
+  function downloadFile(content, filename) {
+    const blob = new Blob([content], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -214,67 +419,456 @@
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    showToast(`유리 가다용 파일 (${filename}) 다운로드 완료!`, 'success');
-  });
+  }
 
   // ========== Copy Current Active G-code ==========
   document.getElementById('btnCopyCode').addEventListener('click', () => {
-    const activeResult = currentGcodeTab === 'frame' ? lastResult.frame : lastResult.template;
+    let activeResult = null;
+    let typeStr = '';
+    
+    if (currentModule === 'oval') {
+      activeResult = currentGcodeTab === 'frame' ? lastResult.frame : lastResult.template;
+      typeStr = currentGcodeTab === 'frame' ? '액자 가공용' : '유리 가다용';
+    } else {
+      activeResult = lastResult.nameplate;
+      typeStr = '명패 각인용';
+    }
+
     if (!activeResult || !activeResult.gcode) {
-      showToast('먼저 G-code 세트를 생성하세요.', 'info');
+      showToast('먼저 NC 가공코드를 생성하세요.', 'info');
       return;
     }
+    
     navigator.clipboard.writeText(activeResult.gcode).then(() => {
-      const typeStr = currentGcodeTab === 'frame' ? '액자 가공용' : '유리 가다용';
       showToast(`${typeStr} G-code가 클립보드에 복사되었습니다.`, 'success');
     }).catch(() => {
       showToast('복사 실패. 브라우저 권한을 확인하세요.', 'error');
     });
   });
 
-  // ========== Reset ==========
+  // ========== Reset All Settings ==========
   document.getElementById('btnReset').addEventListener('click', () => {
-    document.getElementById('ovalWidth').value = 300;
-    document.getElementById('ovalHeight').value = 400;
-    document.getElementById('frameWidth').value = 20;
-    document.getElementById('rabbetWidth').value = 5;
-    document.getElementById('rabbitDepth').value = 10;
-    document.getElementById('materialThickness').value = 15;
-    document.getElementById('woodType').value = 'hardwood';
-    document.getElementById('toolDiameter').value = 6;
-    document.getElementById('toolFlutes').value = '2';
-    document.getElementById('cncModel').value = 'ttc450pro';
-    document.getElementById('tabCount').value = 4;
-    document.getElementById('tabWidth').value = 6;
-    document.getElementById('tabHeight').value = 2;
-    document.getElementById('finishAllowance').value = 0.3;
-    document.getElementById('cutDirection').value = 'climb';
-    document.getElementById('originPosition').value = 'center';
-    document.getElementById('enableRabbit').checked = true;
-    document.getElementById('enableFinishPass').checked = true;
+    if (currentModule === 'oval') {
+      document.getElementById('ovalWidth').value = 300;
+      document.getElementById('ovalHeight').value = 400;
+      document.getElementById('frameWidth').value = 20;
+      document.getElementById('rabbetWidth').value = 5;
+      document.getElementById('rabbitDepth').value = 10;
+      document.getElementById('materialThickness').value = 15;
+      document.getElementById('woodType').value = 'hardwood';
+      document.getElementById('toolDiameter').value = 6;
+      document.getElementById('toolFlutes').value = '2';
+      document.getElementById('cncModel').value = 'ttc450pro';
+      document.getElementById('tabCount').value = 4;
+      document.getElementById('tabWidth').value = 6;
+      document.getElementById('tabHeight').value = 2;
+      document.getElementById('finishAllowance').value = 0.3;
+      document.getElementById('cutDirection').value = 'climb';
+      document.getElementById('originPosition').value = 'center';
+      document.getElementById('enableRabbit').checked = true;
+      document.getElementById('enableFinishPass').checked = true;
 
-    lastResult.frame = null;
-    lastResult.template = null;
-    currentGcodeTab = 'frame';
+      lastResult.frame = null;
+      lastResult.template = null;
+      currentGcodeTab = 'frame';
 
-    tabFrame.classList.add('active');
-    tabTemplate.classList.remove('active');
+      tabFrame.classList.add('active');
+      tabTemplate.classList.remove('active');
+
+      document.getElementById('btnDownload').disabled = true;
+      const btnDlTemp = document.getElementById('btnDownloadTemplate');
+      btnDlTemp.disabled = true;
+      btnDlTemp.style.opacity = '0.25';
+      btnDlTemp.style.cursor = 'not-allowed';
+    } else {
+      document.getElementById('npWidth').value = 200;
+      document.getElementById('npHeight').value = 100;
+      document.getElementById('npThickness').value = 10;
+      document.getElementById('npWoodType').value = 'hardwood';
+      document.getElementById('npToolDiameter').value = 2;
+      document.getElementById('npToolFlutes').value = '2';
+      document.getElementById('npCncModel').value = 'ttc450pro';
+      document.getElementById('npEngraveDepth').value = 1.5;
+      document.getElementById('npSafeZ').value = 5.0;
+      document.getElementById('npOriginPosition').value = 'bottomleft';
+
+      document.getElementById('npText').value = 'STUDIO HYUN';
+      document.getElementById('npFont').value = 'NanumGothic';
+      document.getElementById('npFontSize').value = 25;
+      document.getElementById('npTextAlign').value = 'center';
+      document.getElementById('npOffsetX').value = 0;
+      document.getElementById('npOffsetY').value = 0;
+      document.getElementById('npFontBold').checked = false;
+
+      lastResult.nameplate = null;
+      document.getElementById('btnDownloadNameplate').disabled = true;
+      updateValidationReport(null);
+      
+      // Reload default font
+      loadFont('NanumGothic');
+    }
 
     displayGcodeResult();
 
-    const btnDl = document.getElementById('btnDownload');
-    const btnDlTemp = document.getElementById('btnDownloadTemplate');
-    btnDl.disabled = true;
-    btnDlTemp.disabled = true;
-    btnDlTemp.style.opacity = '0.25';
-    btnDlTemp.style.cursor = 'not-allowed';
-
-    document.querySelectorAll('.preview-tab').forEach(t => t.classList.remove('active'));
-    document.getElementById('tabTop').classList.add('active');
+    setPreviewTabActive('top');
     currentView = 'top';
 
     updateCalcDisplay();
-    showToast('설정이 초기화되었습니다.', 'info');
+    showToast('현재 모듈의 설정이 초기화되었습니다.', 'info');
+  });
+
+  // ========== Font Uploading & Selector binding ==========
+  const npFontSelect = document.getElementById('npFont');
+  npFontSelect.addEventListener('change', (e) => {
+    const val = e.target.value;
+    if (val === 'custom') {
+      document.getElementById('fontFileInput').click();
+    } else {
+      loadFont(val);
+    }
+  });
+
+  document.getElementById('btnUploadFont').addEventListener('click', () => {
+    document.getElementById('fontFileInput').click();
+  });
+
+  document.getElementById('fontFileInput').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(evt) {
+      try {
+        const font = opentype.parse(evt.target.result);
+        loadedFonts['custom'] = font;
+        activeFont = font;
+
+        const customOption = npFontSelect.querySelector('option[value="custom"]');
+        customOption.textContent = `커스텀: ${file.name.substring(0, 12)}`;
+        npFontSelect.value = 'custom';
+
+        updateCalcDisplay();
+        showToast(`업로드한 폰트 '${file.name}'를 적용했습니다.`, 'success');
+      } catch(err) {
+        showToast('올바른 글꼴 파일(.ttf, .otf)이 아닙니다.', 'error');
+        console.error(err);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+    e.target.value = ''; // Clear value
+  });
+
+  // ========== Safety Validation UI Update ==========
+  function updateValidationReport(report) {
+    const reportStatus = document.getElementById('reportStatus');
+    const reportStatusText = document.getElementById('reportStatusText');
+    const reportDetails = document.getElementById('reportDetails');
+
+    if (!report) {
+      reportStatus.className = 'report-status status-safe';
+      reportStatusText.textContent = '각인 가공 가능 (대기 중)';
+      reportDetails.textContent = '설정을 조정한 후 "G-CODE 생성" 버튼을 클릭하면 안전성 검사 리포트가 여기에 생성됩니다.';
+      return;
+    }
+
+    reportStatus.className = `report-status status-${report.status}`;
+    reportStatusText.textContent = report.statusText;
+    reportDetails.innerHTML = report.details;
+  }
+
+  // ========== Preset System Integration ==========
+  function getActivePresetKey() {
+    return currentModule === 'oval' ? OVAL_PRESET_KEY : NP_PRESET_KEY;
+  }
+
+  function getPresets() {
+    const key = getActivePresetKey();
+    try {
+      return JSON.parse(localStorage.getItem(key)) || {};
+    } catch(e) {
+      return {};
+    }
+  }
+
+  function savePresets(presets) {
+    const key = getActivePresetKey();
+    localStorage.setItem(key, JSON.stringify(presets));
+  }
+
+  function updatePresetDropdown() {
+    const presets = getPresets();
+    const prefix = currentModule === 'oval' ? '' : 'np';
+    const select = document.getElementById(prefix ? 'npPresetSelect' : 'presetSelect');
+    
+    select.innerHTML = '<option value="">-- 프리셋 선택 --</option>';
+    
+    Object.keys(presets).sort().forEach(name => {
+      const option = document.createElement('option');
+      option.value = name;
+      option.textContent = name;
+      select.appendChild(option);
+    });
+  }
+
+  function loadSelectedPreset() {
+    const prefix = currentModule === 'oval' ? '' : 'np';
+    const select = document.getElementById(prefix ? 'npPresetSelect' : 'presetSelect');
+    const name = select.value;
+    if (!name) return;
+
+    const presets = getPresets();
+    const config = presets[name];
+    if (!config) return;
+
+    // Apply configuration values
+    Object.keys(config).forEach(key => {
+      const el = document.getElementById(key);
+      if (el) {
+        if (el.type === 'checkbox') {
+          el.checked = config[key];
+        } else {
+          el.value = config[key];
+        }
+      }
+    });
+
+    document.getElementById(prefix ? 'npPresetName' : 'presetName').value = name;
+    
+    // For nameplate module, reload the selected preset font if changed
+    if (currentModule === 'nameplate' && config.npFont) {
+      if (config.npFont !== 'custom') {
+        loadFont(config.npFont);
+      }
+    }
+
+    updateCalcDisplay();
+    showToast(`'${name}' 프리셋을 불러왔습니다.`, 'success');
+  }
+
+  function savePreset() {
+    const prefix = currentModule === 'oval' ? '' : 'np';
+    const nameInput = document.getElementById(prefix ? 'npPresetName' : 'presetName');
+    const name = nameInput.value.trim();
+    if (!name) {
+      showToast('프리셋 이름을 입력해주세요.', 'error');
+      return;
+    }
+
+    const presets = getPresets();
+    
+    // Config properties to capture depending on active module
+    let config = {};
+    if (currentModule === 'oval') {
+      config = {
+        ovalWidth: parseFloat(document.getElementById('ovalWidth').value),
+        ovalHeight: parseFloat(document.getElementById('ovalHeight').value),
+        frameWidth: parseFloat(document.getElementById('frameWidth').value),
+        rabbetWidth: parseFloat(document.getElementById('rabbetWidth').value),
+        rabbitDepth: parseFloat(document.getElementById('rabbitDepth').value),
+        materialThickness: parseFloat(document.getElementById('materialThickness').value),
+        woodType: document.getElementById('woodType').value,
+        toolDiameter: parseFloat(document.getElementById('toolDiameter').value),
+        toolFlutes: parseInt(document.getElementById('toolFlutes').value),
+        cncModel: document.getElementById('cncModel').value,
+        tabCount: parseInt(document.getElementById('tabCount').value),
+        tabWidth: parseFloat(document.getElementById('tabWidth').value),
+        tabHeight: parseFloat(document.getElementById('tabHeight').value),
+        finishAllowance: parseFloat(document.getElementById('finishAllowance').value),
+        cutDirection: document.getElementById('cutDirection').value,
+        originPosition: document.getElementById('originPosition').value,
+        enableRabbit: document.getElementById('enableRabbit').checked,
+        enableFinishPass: document.getElementById('enableFinishPass').checked
+      };
+    } else {
+      config = {
+        npWidth: parseFloat(document.getElementById('npWidth').value),
+        npHeight: parseFloat(document.getElementById('npHeight').value),
+        npThickness: parseFloat(document.getElementById('npThickness').value),
+        npWoodType: document.getElementById('npWoodType').value,
+        npToolDiameter: parseFloat(document.getElementById('npToolDiameter').value),
+        npToolFlutes: parseInt(document.getElementById('npToolFlutes').value),
+        npCncModel: document.getElementById('npCncModel').value,
+        npEngraveDepth: parseFloat(document.getElementById('npEngraveDepth').value),
+        npSafeZ: parseFloat(document.getElementById('npSafeZ').value),
+        npOriginPosition: document.getElementById('npOriginPosition').value,
+        npText: document.getElementById('npText').value,
+        npFont: document.getElementById('npFont').value,
+        npFontSize: parseFloat(document.getElementById('npFontSize').value),
+        npTextAlign: document.getElementById('npTextAlign').value,
+        npOffsetX: parseFloat(document.getElementById('npOffsetX').value),
+        npOffsetY: parseFloat(document.getElementById('npOffsetY').value),
+        npFontBold: document.getElementById('npFontBold').checked
+      };
+    }
+
+    if (presets[name]) {
+      if (!confirm(`'${name}' 프리셋이 이미 존재합니다. 덮어쓰시겠습니까?`)) {
+        return;
+      }
+    }
+
+    presets[name] = config;
+    savePresets(presets);
+    updatePresetDropdown();
+    document.getElementById(prefix ? 'npPresetSelect' : 'presetSelect').value = name;
+    showToast(`'${name}' 프리셋이 저장되었습니다.`, 'success');
+  }
+
+  function deletePreset() {
+    const prefix = currentModule === 'oval' ? '' : 'np';
+    const select = document.getElementById(prefix ? 'npPresetSelect' : 'presetSelect');
+    const nameInput = document.getElementById(prefix ? 'npPresetName' : 'presetName');
+    const name = select.value || nameInput.value.trim();
+    
+    if (!name) {
+      showToast('삭제할 프리셋을 선택하거나 이름을 입력해주세요.', 'error');
+      return;
+    }
+
+    const presets = getPresets();
+    if (!presets[name]) {
+      showToast(`'${name}' 프리셋을 찾을 수 없습니다.`, 'error');
+      return;
+    }
+
+    if (!confirm(`'${name}' 프리셋을 정말 삭제하시겠습니까?`)) {
+      return;
+    }
+
+    delete presets[name];
+    savePresets(presets);
+    updatePresetDropdown();
+    
+    select.value = '';
+    nameInput.value = '';
+    showToast(`'${name}' 프리셋이 삭제되었습니다.`, 'info');
+  }
+
+  function exportPreset() {
+    const prefix = currentModule === 'oval' ? '' : 'np';
+    const nameInput = document.getElementById(prefix ? 'npPresetName' : 'presetName');
+    const name = nameInput.value.trim() || `${currentModule}_settings`;
+    
+    // Capture state config
+    let config = {};
+    if (currentModule === 'oval') {
+      config = getOvalConfig();
+    } else {
+      config = getNameplateConfig();
+      // Rename config keys to match input IDs for simple mapping
+      config = {
+        npWidth: config.width,
+        npHeight: config.height,
+        npThickness: config.thickness,
+        npWoodType: config.woodType,
+        npToolDiameter: config.toolDiameter,
+        npToolFlutes: config.toolFlutes,
+        npCncModel: config.cncModel,
+        npEngraveDepth: config.engraveDepth,
+        npSafeZ: config.safeZ,
+        npOriginPosition: config.originPosition,
+        npText: config.text,
+        npFont: config.fontName,
+        npFontSize: config.fontSize,
+        npTextAlign: config.textAlign,
+        npOffsetX: config.offsetX,
+        npOffsetY: config.offsetY,
+        npFontBold: config.bold
+      };
+    }
+
+    const jsonStr = JSON.stringify(config, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${name.replace(/\s+/g, '_')}_settings.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('설정 파일(.json)을 다운로드했습니다.', 'success');
+  }
+
+  function importPreset(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(evt) {
+      try {
+        const config = JSON.parse(evt.target.result);
+        
+        // Quick validate key names depending on active module
+        const expectedKey = currentModule === 'oval' ? 'ovalWidth' : 'npWidth';
+        if (!config[expectedKey]) {
+          showToast('올바른 설정 파일이 아닙니다.', 'error');
+          return;
+        }
+
+        // Apply config values to inputs
+        Object.keys(config).forEach(key => {
+          const el = document.getElementById(key);
+          if (el) {
+            if (el.type === 'checkbox') {
+              el.checked = config[key];
+            } else {
+              el.value = config[key];
+            }
+          }
+        });
+
+        // Set preset name input from filename
+        const presetName = file.name.replace('_settings.json', '').replace('.json', '');
+        const prefix = currentModule === 'oval' ? '' : 'np';
+        document.getElementById(prefix ? 'npPresetName' : 'presetName').value = presetName;
+
+        // If Nameplate, reload the loaded font if it exists
+        if (currentModule === 'nameplate' && config.npFont) {
+          if (config.npFont !== 'custom') {
+            loadFont(config.npFont);
+          }
+        }
+
+        updateCalcDisplay();
+        showToast('설정 파일에서 세팅을 성공적으로 불러왔습니다.', 'success');
+      } catch(err) {
+        showToast('파일을 읽는 도중 오류가 발생했습니다.', 'error');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  }
+
+  // Presets Events binding
+  document.getElementById('presetSelect').addEventListener('change', loadSelectedPreset);
+  document.getElementById('btnSavePreset').addEventListener('click', savePreset);
+  document.getElementById('btnDeletePreset').addEventListener('click', deletePreset);
+  document.getElementById('btnExportPreset').addEventListener('click', exportPreset);
+  document.getElementById('importPresetFile').addEventListener('change', importPreset);
+
+  document.getElementById('npPresetSelect').addEventListener('change', loadSelectedPreset);
+  document.getElementById('btnNpSavePreset').addEventListener('click', savePreset);
+  document.getElementById('btnNpDeletePreset').addEventListener('click', deletePreset);
+  document.getElementById('btnNpExportPreset').addEventListener('click', exportPreset);
+  document.getElementById('importNpPresetFile').addEventListener('change', importPreset);
+
+  // ========== Event binding for all inputs/selects ==========
+  // Event listeners for automatic preview updates on change
+  document.addEventListener('input', (e) => {
+    const tag = e.target.tagName.toLowerCase();
+    const type = e.target.type;
+    if ((tag === 'input' && type !== 'file') || tag === 'select') {
+      updateCalcDisplay();
+    }
+  });
+
+  document.addEventListener('change', (e) => {
+    const tag = e.target.tagName.toLowerCase();
+    const type = e.target.type;
+    if ((tag === 'input' && type !== 'file') || tag === 'select') {
+      updateCalcDisplay();
+    }
   });
 
   // ========== G-code Syntax Highlighting ==========
@@ -297,7 +891,7 @@
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
-  // ========== Toast ==========
+  // ========== Toast Notification ==========
   function showToast(message, type = 'info') {
     const container = document.getElementById('toastContainer');
     const toast = document.createElement('div');
@@ -311,188 +905,6 @@
     container.appendChild(toast);
     setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 3200);
   }
-
-  // ========== Live Update on Input Change ==========
-  const inputs = document.querySelectorAll('input, select');
-  inputs.forEach(input => {
-    input.addEventListener('change', updateCalcDisplay);
-    input.addEventListener('input', updateCalcDisplay);
-  });
-
-
-  // ========== Presets System ==========
-  const PRESET_KEY = 'oval_cam_presets';
-
-  function getPresets() {
-    try {
-      return JSON.parse(localStorage.getItem(PRESET_KEY)) || {};
-    } catch(e) {
-      return {};
-    }
-  }
-
-  function savePresets(presets) {
-    localStorage.setItem(PRESET_KEY, JSON.stringify(presets));
-  }
-
-  function updatePresetDropdown() {
-    const presets = getPresets();
-    const select = document.getElementById('presetSelect');
-    
-    // Clear old options except the first one
-    select.innerHTML = '<option value="">-- 프리셋 선택 --</option>';
-    
-    Object.keys(presets).sort().forEach(name => {
-      const option = document.createElement('option');
-      option.value = name;
-      option.textContent = name;
-      select.appendChild(option);
-    });
-  }
-
-  function loadSelectedPreset() {
-    const select = document.getElementById('presetSelect');
-    const name = select.value;
-    if (!name) return;
-
-    const presets = getPresets();
-    const config = presets[name];
-    if (!config) return;
-
-    // Apply config values to inputs
-    Object.keys(config).forEach(key => {
-      const el = document.getElementById(key);
-      if (el) {
-        if (el.type === 'checkbox') {
-          el.checked = config[key];
-        } else {
-          el.value = config[key];
-        }
-      }
-    });
-
-    document.getElementById('presetName').value = name;
-    updateCalcDisplay();
-    showToast(`'${name}' 프리셋을 불러왔습니다.`, 'success');
-  }
-
-  function savePreset() {
-    const nameInput = document.getElementById('presetName');
-    const name = nameInput.value.trim();
-    if (!name) {
-      showToast('프리셋 이름을 입력해주세요.', 'error');
-      return;
-    }
-
-    const presets = getPresets();
-    const config = getConfig();
-
-    if (presets[name]) {
-      if (!confirm(`'${name}' 프리셋이 이미 존재합니다. 덮어쓰시겠습니까?`)) {
-        return;
-      }
-    }
-
-    presets[name] = config;
-    savePresets(presets);
-    updatePresetDropdown();
-    document.getElementById('presetSelect').value = name;
-    showToast(`'${name}' 프리셋이 저장되었습니다.`, 'success');
-  }
-
-  function deletePreset() {
-    const select = document.getElementById('presetSelect');
-    const name = select.value || document.getElementById('presetName').value.trim();
-    
-    if (!name) {
-      showToast('삭제할 프리셋을 선택하거나 이름을 입력해주세요.', 'error');
-      return;
-    }
-
-    const presets = getPresets();
-    if (!presets[name]) {
-      showToast(`'${name}' 프리셋을 찾을 수 없습니다.`, 'error');
-      return;
-    }
-
-    if (!confirm(`'${name}' 프리셋을 정말 삭제하시겠습니까?`)) {
-      return;
-    }
-
-    delete presets[name];
-    savePresets(presets);
-    updatePresetDropdown();
-    
-    document.getElementById('presetSelect').value = '';
-    document.getElementById('presetName').value = '';
-    showToast(`'${name}' 프리셋이 삭제되었습니다.`, 'info');
-  }
-
-  function exportPreset() {
-    const config = getConfig();
-    const name = document.getElementById('presetName').value.trim() || 'oval_settings';
-    const jsonStr = JSON.stringify(config, null, 2);
-    
-    const blob = new Blob([jsonStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${name.replace(/\s+/g, '_')}_settings.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    showToast('세팅 설정 파일(.json)을 다운로드했습니다.', 'success');
-  }
-
-  function importPreset(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = function(evt) {
-      try {
-        const config = JSON.parse(evt.target.result);
-        
-        // Basic schema validation check
-        if (!config.ovalWidth || !config.ovalHeight || !config.frameWidth) {
-          showToast('올바른 설정 파일이 아닙니다.', 'error');
-          return;
-        }
-
-        // Apply config values to inputs
-        Object.keys(config).forEach(key => {
-          const el = document.getElementById(key);
-          if (el) {
-            if (el.type === 'checkbox') {
-              el.checked = config[key];
-            } else {
-              el.value = config[key];
-            }
-          }
-        });
-
-        // Set preset name input from filename
-        const presetName = file.name.replace('_settings.json', '').replace('.json', '');
-        document.getElementById('presetName').value = presetName;
-
-        updateCalcDisplay();
-        showToast('설정 파일에서 세팅을 정상적으로 불러왔습니다.', 'success');
-      } catch(err) {
-        showToast('파일을 읽는 도중 오류가 발생했습니다.', 'error');
-      }
-    };
-    reader.readAsText(file);
-    // Reset file input so same file can be imported again
-    e.target.value = '';
-  }
-
-  // Wires Preset events
-  document.getElementById('presetSelect').addEventListener('change', loadSelectedPreset);
-  document.getElementById('btnSavePreset').addEventListener('click', savePreset);
-  document.getElementById('btnDeletePreset').addEventListener('click', deletePreset);
-  document.getElementById('btnExportPreset').addEventListener('click', exportPreset);
-  document.getElementById('importPresetFile').addEventListener('change', importPreset);
 
   // ========== Initial Render ==========
   updatePresetDropdown();

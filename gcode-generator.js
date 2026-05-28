@@ -550,7 +550,234 @@ class GCodeGenerator {
       isTemplate: true
     };
   }
+
+  /**
+   * Generate Nameplate Engraving G-code using opentype.js font path
+   */
+  generateNameplate(config, font) {
+    const params = this.calculateParams({
+      cncModel: config.cncModel,
+      toolDiameter: config.toolDiameter,
+      toolFlutes: config.toolFlutes,
+      woodType: config.woodType
+    });
+    const { rpm, feedRate, doc, plungeRate, safeZ } = params;
+
+    // Safety checks
+    const thickness = config.thickness;
+    const engraveDepth = config.engraveDepth;
+    let safetyReport = {
+      status: 'safe',
+      statusText: '안전 (가공 가능)',
+      details: `안전성 확인 완료: 각인 깊이(${engraveDepth}mm)가 소재 두께(${thickness}mm)에 비해 적절합니다. 안전하게 G-code를 가공할 수 있습니다.`
+    };
+
+    if (engraveDepth >= thickness) {
+      safetyReport = {
+        status: 'danger',
+        statusText: '위험 (가공 차단됨)',
+        details: `<strong>위험:</strong> 각인 깊이(${engraveDepth}mm)가 소재 두께(${thickness}mm)보다 깊거나 같습니다! 이대로 가공하면 공작물 전체가 관통되어 CNC 베드가 파손됩니다. 각인 깊이를 재료 두께보다 작게 조정하세요.`
+      };
+      return {
+        error: '가공 불가: 각인 깊이가 소재 두께를 초과합니다.',
+        safetyReport
+      };
+    } else if (engraveDepth > thickness * 0.5) {
+      safetyReport = {
+        status: 'warning',
+        statusText: '주의 (과도한 깊이)',
+        details: `<strong>주의:</strong> 각인 깊이(${engraveDepth}mm)가 소재 두께(${thickness}mm)의 50%를 초과합니다. 얇은 공작물 뒷면이 관통되거나 재료 강도가 떨어질 수 있으니 이송 속도를 늦추거나 각인 깊이를 줄이기를 권장합니다.`
+      };
+    }
+
+    const lines = [];
+    let totalDist = 0;
+    let lastX = null, lastY = null, lastZ = null;
+
+    const addDist = (x, y, z) => {
+      if (lastX !== null) {
+        const dx = x - lastX, dy = y - lastY, dz = (z || 0) - (lastZ || 0);
+        totalDist += Math.sqrt(dx*dx + dy*dy + dz*dz);
+      }
+      lastX = x; lastY = y; lastZ = z || lastZ;
+    };
+
+    const fmt = (v) => v.toFixed(3);
+
+    // Get text bounding box at 0,0 first to calculate centering offsets
+    const testPath = font.getPath(config.text, 0, 0, config.fontSize);
+    const bbox = testPath.getBoundingBox();
+
+    // Center point in canvas coordinates (Y-down)
+    const tx_c = (bbox.x1 + bbox.x2) / 2;
+    const ty_c = (bbox.y1 + bbox.y2) / 2;
+
+    // Helper to map canvas-space (Y-down) to CNC-space (Y-up, origin aware)
+    const mapToCNC = (cx, cy) => {
+      const relX = cx - tx_c;
+      const relY = ty_c - cy; // Flip Y direction
+
+      if (config.originPosition === 'center') {
+        return {
+          x: relX + config.offsetX,
+          y: relY + config.offsetY
+        };
+      } else { // bottomleft
+        return {
+          x: (config.width / 2) + relX + config.offsetX,
+          y: (config.height / 2) + relY + config.offsetY
+        };
+      }
+    };
+
+    // Parse path into distinct contours and interpolate curves
+    const contours = [];
+    let currentContour = [];
+    let curX = 0, curY = 0;
+    let startX = 0, startY = 0;
+
+    testPath.commands.forEach(cmd => {
+      if (cmd.type === 'M') {
+        if (currentContour.length > 0) {
+          contours.push(currentContour);
+        }
+        currentContour = [{ type: 'M', x: cmd.x, y: cmd.y }];
+        startX = cmd.x;
+        startY = cmd.y;
+        curX = cmd.x;
+        curY = cmd.y;
+      } else if (cmd.type === 'L') {
+        currentContour.push({ type: 'L', x: cmd.x, y: cmd.y });
+        curX = cmd.x;
+        curY = cmd.y;
+      } else if (cmd.type === 'Q') {
+        // Interpolate quadratic Bezier
+        const segments = 8;
+        for (let i = 1; i <= segments; i++) {
+          const t = i / segments;
+          const mt = 1 - t;
+          const x = mt*mt*curX + 2*mt*t*cmd.x1 + t*t*cmd.x;
+          const y = mt*mt*curY + 2*mt*t*cmd.y1 + t*t*cmd.y;
+          currentContour.push({ type: 'L', x, y });
+        }
+        curX = cmd.x;
+        curY = cmd.y;
+      } else if (cmd.type === 'C') {
+        // Interpolate cubic Bezier
+        const segments = 12;
+        for (let i = 1; i <= segments; i++) {
+          const t = i / segments;
+          const mt = 1 - t;
+          const x = mt*mt*mt*curX + 3*mt*mt*t*cmd.x1 + 3*mt*t*t*cmd.x2 + t*t*t*cmd.x;
+          const y = mt*mt*mt*curY + 3*mt*mt*t*cmd.y1 + 3*mt*t*t*cmd.y2 + t*t*t*cmd.y;
+          currentContour.push({ type: 'L', x, y });
+        }
+        curX = cmd.x;
+        curY = cmd.y;
+      } else if (cmd.type === 'Z') {
+        currentContour.push({ type: 'L', x: startX, y: startY });
+        curX = startX;
+        curY = startY;
+      }
+    });
+
+    if (currentContour.length > 0) {
+      contours.push(currentContour);
+    }
+
+    // Convert contours to CNC space
+    const cncContours = contours.map(contour => {
+      return contour.map(cmd => {
+        const pt = mapToCNC(cmd.x, cmd.y);
+        return {
+          type: cmd.type,
+          x: pt.x,
+          y: pt.y
+        };
+      });
+    });
+
+    // ========== HEADER ==========
+    lines.push(`; =============================================`);
+    lines.push(`; Nameplate Engraving — ${config.width}×${config.height}mm`);
+    lines.push(`; Text: "${config.text}"`);
+    lines.push(`; Generated by STUDIOHYUN Cam Tool`);
+    lines.push(`; Machine: ${params.spec.name}`);
+    lines.push(`; Material: ${config.woodType} / ${config.thickness}mm thick`);
+    lines.push(`; Tool: ${config.toolDiameter}mm ${config.toolFlutes}-flute bit`);
+    lines.push(`; Date: ${new Date().toISOString().slice(0,10)}`);
+    lines.push(`; =============================================`);
+    lines.push('');
+    lines.push(`; --- Machining Parameters ---`);
+    lines.push(`; RPM: ${rpm}`);
+    lines.push(`; Feed Rate: ${feedRate} mm/min`);
+    lines.push(`; Plunge Rate: ${plungeRate} mm/min`);
+    lines.push(`; Engrave Depth: ${engraveDepth} mm (Max depth)`);
+    lines.push(`; Depth per Pass (DOC): ${doc} mm`);
+    lines.push(`; Safe Height: ${safeZ} mm`);
+    lines.push('');
+
+    // ========== INIT ==========
+    lines.push('G90 ; Absolute positioning');
+    lines.push('G21 ; Millimeters');
+    lines.push(`G0 Z${fmt(safeZ)} ; Safe height`);
+    lines.push(`M3 S${rpm} ; Spindle ON`);
+    lines.push('G4 P2 ; Dwell 2s for spindle startup');
+    lines.push('');
+
+    // ========== ENGRAVING OPERATIONS (Multi Z-passes if needed) ==========
+    const numZPasses = Math.ceil(engraveDepth / doc);
+    lines.push(`; ========== OPERATION: TEXT ENGRAVING (${numZPasses} passes) ==========`);
+
+    for (let pass = 1; pass <= numZPasses; pass++) {
+      const currentZ = -Math.min(pass * doc, engraveDepth);
+      lines.push(`; --- Z pass ${pass}/${numZPasses} at Z=${fmt(currentZ)} ---`);
+
+      cncContours.forEach((contour, idx) => {
+        if (contour.length === 0) return;
+        lines.push(`; Contour ${idx + 1}`);
+
+        contour.forEach((pt, ptIdx) => {
+          if (pt.type === 'M') {
+            // Retract, move rapidly to start, and plunge
+            lines.push(`G0 Z${fmt(safeZ)}`);
+            lines.push(`G0 X${fmt(pt.x)} Y${fmt(pt.y)}`);
+            lines.push(`G1 Z${fmt(currentZ)} F${plungeRate}`);
+            addDist(pt.x, pt.y, currentZ);
+          } else {
+            // Cut to point
+            lines.push(`G1 X${fmt(pt.x)} Y${fmt(pt.y)} F${feedRate}`);
+            addDist(pt.x, pt.y, currentZ);
+          }
+        });
+      });
+      lines.push(`G0 Z${fmt(safeZ)}`);
+      lines.push('');
+    }
+
+    // ========== FOOTER ==========
+    lines.push('; ========== END ==========');
+    lines.push(`G0 Z${fmt(safeZ)} ; Retract`);
+    lines.push('M5 ; Spindle OFF');
+    lines.push('G0 X0 Y0 ; Return to origin');
+    lines.push('M2 ; Program end');
+
+    // Estimate time (feed travel + simple rapid overhead)
+    const feedTimeMin = totalDist / feedRate;
+    const rapidTimeMin = (cncContours.length * numZPasses * safeZ * 2 / 3000);
+    const totalTimeMin = feedTimeMin + rapidTimeMin;
+
+    return {
+      gcode: lines.join('\n'),
+      lines: lines.length,
+      totalDistance: Math.round(totalDist),
+      estimatedTime: totalTimeMin,
+      safetyReport,
+      params
+    };
+  }
 }
 
 // Export for use
 window.GCodeGenerator = GCodeGenerator;
+

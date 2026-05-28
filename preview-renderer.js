@@ -671,10 +671,307 @@ class PreviewRenderer {
     }
   }
 
+  drawNameplateTopView(config, gcodeResult) {
+    this.resize();
+    const ctx = this.ctx;
+    const w = this.w, h = this.h;
+    ctx.clearRect(0, 0, w, h);
+
+    // Canvas Background
+    ctx.fillStyle = '#131313';
+    ctx.fillRect(0, 0, w, h);
+
+    // Scaling
+    const padding = 60;
+    const scaleX = (w - padding * 2) / config.width;
+    const scaleY = (h - padding * 2) / config.height;
+    this.scale = Math.min(scaleX, scaleY);
+    const s = this.scale;
+    const cx = w / 2, cy = h / 2;
+
+    // Grid & Axes
+    this.drawGrid(ctx, cx, cy, s, w, h);
+
+    // TwoTrees TTC 450 work area boundary (460x460)
+    ctx.strokeStyle = 'rgba(184, 134, 255, 0.2)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([8, 4]);
+    ctx.strokeRect(cx - 230 * s, cy - 230 * s, 460 * s, 460 * s);
+    ctx.setLineDash([]);
+
+    // 1. Material Plate (Slate grey fill, white outline)
+    const plateW = config.width * s;
+    const plateH = config.height * s;
+    const px = cx - plateW / 2;
+    const py = cy - plateH / 2;
+
+    ctx.fillStyle = 'rgba(45, 45, 45, 0.85)';
+    ctx.fillRect(px, py, plateW, plateH);
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(px, py, plateW, plateH);
+
+    // 2. Text rendering (WYSIWYG)
+    if (!config.text) {
+      ctx.fillStyle = '#949494';
+      ctx.font = '500 12px "Space Mono"';
+      ctx.textAlign = 'center';
+      ctx.fillText('No Text Input', cx, cy);
+    } else if (!config.font) {
+      ctx.fillStyle = '#949494';
+      ctx.font = '500 12px "Space Mono"';
+      ctx.textAlign = 'center';
+      ctx.fillText('Loading Font...', cx, cy);
+    } else {
+      const font = config.font;
+      
+      // Calculate font path bounding box at 0,0 to center it
+      const testPath = font.getPath(config.text, 0, 0, config.fontSize);
+      const bbox = testPath.getBoundingBox();
+
+      // Find baseline offsets
+      const bx = (bbox.x1 + bbox.x2) / 2;
+      const by = (bbox.y1 + bbox.y2) / 2;
+
+      // Centered position (relative to plate top-left in millimeters)
+      let tx = config.width / 2 - bx;
+      let ty = config.height / 2 - by;
+
+      // Apply user offsets
+      tx += config.offsetX;
+      ty -= config.offsetY;
+
+      // Apply bold styling if checked (we can simulate standard bold by drawing multiple overlapping strokes or loading bold font)
+      // opentype.js draws custom curves. We will fetch the outline path.
+      const path = font.getPath(config.text, tx, ty, config.fontSize);
+
+      // Save context state, apply translation to plate top-left, and scale
+      ctx.save();
+      ctx.translate(px, py);
+      ctx.scale(s, s);
+
+      // Draw the path outline representing the engraving cut
+      ctx.beginPath();
+      path.commands.forEach(cmd => {
+        if (cmd.type === 'M') {
+          ctx.moveTo(cmd.x, cmd.y);
+        } else if (cmd.type === 'L') {
+          ctx.lineTo(cmd.x, cmd.y);
+        } else if (cmd.type === 'Q') {
+          ctx.quadraticCurveTo(cmd.x1, cmd.y1, cmd.x, cmd.y);
+        } else if (cmd.type === 'C') {
+          ctx.bezierCurveTo(cmd.x1, cmd.y1, cmd.x2, cmd.y2, cmd.x, cmd.y);
+        } else if (cmd.type === 'Z') {
+          ctx.closePath();
+        }
+      });
+
+      // Fill with semi-transparent mint (engraved groove)
+      ctx.fillStyle = 'rgba(60, 255, 208, 0.15)';
+      ctx.fill();
+
+      // Stroke outline (actual cutter path representation)
+      ctx.strokeStyle = 'rgba(60, 255, 208, 0.95)';
+      ctx.lineWidth = Math.max(0.5, config.toolDiameter); // show cutter thickness scaled
+      if (config.bold) {
+        ctx.lineWidth = Math.max(1.0, config.toolDiameter * 1.5);
+      }
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    // 3. Dimensions
+    this.drawDimension(ctx, px, py + plateH + 25, px + plateW, py + plateH + 25, `${config.width} mm`, '#3cffd0');
+    this.drawDimension(ctx, px + plateW + 25, py, px + plateW + 25, py + plateH, `${config.height} mm`, '#3cffd0');
+
+    // 4. Origin Marker
+    const ox = config.originPosition === 'center' ? cx : px;
+    const oy = config.originPosition === 'center' ? cy : py + plateH;
+    this.drawOrigin(ctx, ox, oy);
+
+    // Update bottom info label
+    document.getElementById('infoSize').textContent = `명패 ${config.width} × ${config.height} mm (두께 ${config.thickness}mm)`;
+    document.getElementById('infoScale').textContent = `SCALE: ${s.toFixed(2)}px/mm`;
+  }
+
+  drawNameplateToolpath(config, gcodeResult) {
+    this.resize();
+    const ctx = this.ctx;
+    const w = this.w, h = this.h;
+    ctx.clearRect(0, 0, w, h);
+
+    // Canvas Background
+    ctx.fillStyle = '#131313';
+    ctx.fillRect(0, 0, w, h);
+
+    // Scaling
+    const padding = 60;
+    const scaleX = (w - padding * 2) / config.width;
+    const scaleY = (h - padding * 2) / config.height;
+    this.scale = Math.min(scaleX, scaleY);
+    const s = this.scale;
+    const cx = w / 2, cy = h / 2;
+
+    // Grid & Axes
+    this.drawGrid(ctx, cx, cy, s, w, h);
+
+    // Plate Boundary
+    const plateW = config.width * s;
+    const plateH = config.height * s;
+    const px = cx - plateW / 2;
+    const py = cy - plateH / 2;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.strokeRect(px, py, plateW, plateH);
+    ctx.setLineDash([]);
+
+    // Parse G-code for rendering
+    if (gcodeResult && gcodeResult.gcode) {
+      const lines = gcodeResult.gcode.split('\n');
+      let curX = 0, curY = 0;
+      let isRapid = false;
+
+      ctx.lineWidth = 1.2;
+
+      // Coordinate mapping helper
+      const mapCoords = (cncX, cncY) => {
+        if (config.originPosition === 'center') {
+          return { x: cx + cncX * s, y: cy - cncY * s };
+        } else {
+          return { x: px + cncX * s, y: py + plateH - cncY * s };
+        }
+      };
+
+      lines.forEach(line => {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith(';')) return;
+
+        const parts = trimmed.split(/\s+/);
+        const isG0 = parts.includes('G0');
+        const isG1 = parts.includes('G1');
+
+        if (isG0) isRapid = true;
+        else if (isG1) isRapid = false;
+
+        let targetX = curX;
+        let targetY = curY;
+        let hasCoord = false;
+
+        parts.forEach(p => {
+          if (p.startsWith('X')) {
+            targetX = parseFloat(p.substring(1));
+            hasCoord = true;
+          } else if (p.startsWith('Y')) {
+            targetY = parseFloat(p.substring(1));
+            hasCoord = true;
+          }
+        });
+
+        if (hasCoord) {
+          const start = mapCoords(curX, curY);
+          const end = mapCoords(targetX, targetY);
+
+          ctx.beginPath();
+          ctx.moveTo(start.x, start.y);
+          ctx.lineTo(end.x, end.y);
+
+          if (isRapid) {
+            ctx.strokeStyle = 'rgba(248, 113, 113, 0.3)'; // Red rapid move
+            ctx.setLineDash([2, 2]);
+            ctx.lineWidth = 0.75;
+          } else {
+            ctx.strokeStyle = 'rgba(60, 255, 208, 0.75)'; // Jelly Mint cutting path
+            ctx.setLineDash([]);
+            ctx.lineWidth = 1.5;
+          }
+          ctx.stroke();
+
+          curX = targetX;
+          curY = targetY;
+        }
+      });
+      ctx.setLineDash([]);
+    }
+
+    // Legend
+    ctx.font = '700 11px "Space Mono"';
+    ctx.fillStyle = 'rgba(248, 113, 113, 0.6)';
+    ctx.fillRect(15, 20, 14, 14);
+    ctx.fillStyle = '#949494';
+    ctx.textAlign = 'left';
+    ctx.fillText('급속 이송 (G0)', 35, 31);
+
+    ctx.fillStyle = 'rgba(60, 255, 208, 0.8)';
+    ctx.fillRect(15, 42, 14, 14);
+    ctx.fillStyle = '#949494';
+    ctx.fillText('각인 가공 (G1)', 35, 53);
+
+    // Origin Marker
+    const ox = config.originPosition === 'center' ? cx : px;
+    const oy = config.originPosition === 'center' ? cy : py + plateH;
+    this.drawOrigin(ctx, ox, oy);
+
+    // Spec Sheet Box Overlay
+    const boxW = 230;
+    const boxH = 175;
+    const boxX = w - boxW - 20;
+    const boxY = 20;
+
+    ctx.fillStyle = 'rgba(19, 19, 19, 0.88)';
+    ctx.fillRect(boxX, boxY, boxW, boxH);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(boxX, boxY, boxW, boxH);
+
+    ctx.fillStyle = '#3cffd0'; // Jelly Mint
+    ctx.font = '700 10.5px "Space Mono"';
+    ctx.textAlign = 'left';
+    ctx.fillText('SPEC SHEET: NAMEPLATE', boxX + 15, boxY + 24);
+
+    ctx.beginPath();
+    ctx.moveTo(boxX + 15, boxY + 32);
+    ctx.lineTo(boxX + boxW - 15, boxY + 32);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+
+    const specs = [
+      { label: '소재 규격', value: `${config.width}x${config.height} mm` },
+      { label: '소재 두께', value: `${config.thickness} mm` },
+      { label: '각인 깊이', value: `${config.engraveDepth} mm` },
+      { label: '가공 공구 사양', value: `Ø${config.toolDiameter} mm (${config.toolFlutes}날)` },
+      { label: '각인 문구', value: config.text.substring(0, 10) + (config.text.length > 10 ? '..' : '') },
+      { label: '글자 정렬/크기', value: `${config.textAlign} / ${config.fontSize}mm` }
+    ];
+
+    let rowY = boxY + 50;
+    ctx.font = '500 9px "Space Mono"';
+    specs.forEach(s => {
+      ctx.fillStyle = '#949494';
+      ctx.textAlign = 'left';
+      ctx.fillText(s.label, boxX + 15, rowY);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'right';
+      ctx.fillText(s.value, boxX + boxW - 15, rowY);
+      
+      rowY += 18;
+    });
+  }
+
   render(config, view, gcodeResult) {
     this.currentView = view;
-    if (view === 'top') this.drawTopView(config, gcodeResult);
-    else if (view === 'toolpath') this.drawToolpath(config, gcodeResult);
+    const isNameplate = config.text !== undefined;
+
+    if (isNameplate) {
+      if (view === 'top') this.drawNameplateTopView(config, gcodeResult);
+      else if (view === 'toolpath') this.drawNameplateToolpath(config, gcodeResult);
+    } else {
+      if (view === 'top') this.drawTopView(config, gcodeResult);
+      else if (view === 'toolpath') this.drawToolpath(config, gcodeResult);
+    }
   }
 }
 
