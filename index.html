@@ -33,8 +33,8 @@
   <!-- Module Navigation -->
   <nav class="module-nav" id="moduleNav">
     <button class="nav-item active" data-module="oval">타원 액자 가공 (OVAL FRAME)</button>
+    <button class="nav-item" data-module="template">가다 가공 (TEMPLATE)</button>
     <button class="nav-item" data-module="nameplate">명패 각인 가공 (NAMEPLATE)</button>
-    <button class="nav-item disabled" disabled title="추후 추가 예정">추가 가공 메뉴...</button>
   </nav>
 
   <!-- Main Layout -->
@@ -317,6 +317,175 @@
         </div>
       </section>
       </div> <!-- End of ovalSettingsGroup -->
+
+      <!-- Template Settings Wrapper -->
+      <div id="templateSettingsGroup" class="hidden">
+        <!-- Section 1: Frame Preset Selection -->
+        <section class="panel-section" id="tmplSectionPresetGroup">
+          <div class="section-header" data-toggle="tmplPresetContent">
+            <div class="section-badge-group">
+              <span class="section-kicker">OVAL PRESET</span>
+              <h2 class="section-title">액자 프리셋 불러오기</h2>
+            </div>
+            <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+          </div>
+          <div class="section-content" id="tmplPresetContent">
+            <div class="input-group">
+              <label for="tmplPresetSelect">액자 프리셋 선택</label>
+              <select id="tmplPresetSelect">
+                <option value="">-- 프리셋 선택 --</option>
+              </select>
+            </div>
+            <div class="info-card" id="tmplFrameInfoCard" style="display: none; background: rgba(255,255,255,0.03); border: 1px dashed var(--border-subtle); padding: 12px; border-radius: var(--radius-sm); margin-top: 10px;">
+              <div style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px; font-weight: bold; letter-spacing: 0.5px;">선택된 액자 규격</div>
+              <div style="display: flex; justify-content: space-between; font-size: 0.78rem; margin-bottom: 4px;">
+                <span>배면 내경 (가로):</span>
+                <span style="font-weight: bold; color: var(--accent-mint);" id="tmplFrameInnerW">0.0 mm</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; font-size: 0.78rem;">
+                <span>배면 내경 (세로):</span>
+                <span style="font-weight: bold; color: var(--accent-mint);" id="tmplFrameInnerH">0.0 mm</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Section 2: Template Dimensions -->
+        <section class="panel-section" id="tmplSectionDimsGroup">
+          <div class="section-header" data-toggle="tmplDimsContent">
+            <div class="section-badge-group">
+              <span class="section-kicker">DIMENSIONS</span>
+              <h2 class="section-title">가다 규격 설정</h2>
+            </div>
+            <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+          </div>
+          <div class="section-content" id="tmplDimsContent">
+            <div class="input-group">
+              <label for="tmplOffset">가다 오프셋 (+ mm)</label>
+              <div class="input-with-unit">
+                <input type="number" id="tmplOffset" value="11.0" min="0" max="100" step="0.5">
+                <span class="unit">mm</span>
+              </div>
+            </div>
+            <div class="info-card" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-subtle); padding: 12px; border-radius: var(--radius-sm); margin-top: 10px;">
+              <div style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px; font-weight: bold; letter-spacing: 0.5px;">계산된 가다 내경 크기</div>
+              <div style="display: flex; justify-content: space-between; font-size: 0.78rem; margin-bottom: 4px;">
+                <span>가다 가로:</span>
+                <span style="font-weight: bold; color: #ffffff;" id="tmplCalculatedW">0.0 mm</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; font-size: 0.78rem;">
+                <span>가다 세로:</span>
+                <span style="font-weight: bold; color: #ffffff;" id="tmplCalculatedH">0.0 mm</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Section 3: Tool & Machining Settings -->
+        <section class="panel-section" id="tmplSectionMachiningGroup">
+          <div class="section-header" data-toggle="tmplMachiningContent">
+            <div class="section-badge-group">
+              <span class="section-kicker">MACHINING</span>
+              <h2 class="section-title">공구 및 가공 설정</h2>
+            </div>
+            <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+          </div>
+          <div class="section-content" id="tmplMachiningContent">
+            <div class="input-group">
+              <label for="tmplCncModel">CNC 모델</label>
+              <select id="tmplCncModel">
+                <option value="ttc450">TTC 450 (775 스핀들, 80W)</option>
+                <option value="ttc450pro" selected>TTC 450 Pro (500W)</option>
+                <option value="ttc450ultra">TTC 450 Ultra (500W)</option>
+              </select>
+            </div>
+            
+            <div class="input-row">
+              <div class="input-group">
+                <label for="tmplMaterialThickness">소재 두께</label>
+                <div class="input-with-unit">
+                  <input type="number" id="tmplMaterialThickness" value="15.0" min="1" max="50" step="0.5">
+                  <span class="unit">mm</span>
+                </div>
+              </div>
+              <div class="input-group">
+                <label for="tmplToolDiameter">공구 직경</label>
+                <div class="input-with-unit">
+                  <input type="number" id="tmplToolDiameter" value="6.0" min="1" max="20" step="0.1">
+                  <span class="unit">mm</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="input-row">
+              <div class="input-group">
+                <label for="tmplSafeZ">안전 높이 (Safe Z)</label>
+                <div class="input-with-unit">
+                  <input type="number" id="tmplSafeZ" value="5.0" min="1" max="20" step="0.5">
+                  <span class="unit">mm</span>
+                </div>
+              </div>
+              <div class="input-group">
+                <label for="tmplWoodType">소재 종류</label>
+                <select id="tmplWoodType">
+                  <option value="softwood" selected>Softwood / MDF</option>
+                  <option value="hardwood">Hardwood / Plywood</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="input-group">
+              <label for="tmplOriginPosition">원점 위치</label>
+              <select id="tmplOriginPosition">
+                <option value="center">소재 중앙</option>
+                <option value="bottomleft" selected>좌측 하단</option>
+              </select>
+            </div>
+
+            <div class="checkbox-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="tmplEnableFinishPass" checked>
+                <span class="checkbox-custom"></span>
+                마감 정삭 패스 포함
+              </label>
+            </div>
+
+            <div class="info-badge" style="margin-top: 15px;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+              <span id="tmplMachineInfo">작업 영역: 460×460mm / 최대 RPM: 12,000 / 최대 이송: 5,000 mm/min</span>
+            </div>
+
+            <!-- Auto-calculated values display -->
+            <div class="calculated-params" style="margin-top: 15px;">
+              <span class="calc-kicker">AUTO-CALCULATED</span>
+              <h3 class="calc-title">PROCESS PARAMETERS</h3>
+              <div class="calc-grid">
+                <div class="calc-item">
+                  <span class="calc-label">스핀들 RPM</span>
+                  <span class="calc-value" id="calcTmplRPM">12,000</span>
+                </div>
+                <div class="calc-item">
+                  <span class="calc-label">이송 속도 (Feed)</span>
+                  <span class="calc-value" id="calcTmplFeed">1,200 mm/min</span>
+                </div>
+                <div class="calc-item">
+                  <span class="calc-label">절입 깊이 (DOC)</span>
+                  <span class="calc-value" id="calcTmplDOC">2.0 mm</span>
+                </div>
+                <div class="calc-item">
+                  <span class="calc-label">하강 속도 (Plunge)</span>
+                  <span class="calc-value" id="calcTmplPlunge">400 mm/min</span>
+                </div>
+                <div class="calc-item">
+                  <span class="calc-label">안전 높이</span>
+                  <span class="calc-value" id="calcTmplSafeZ">5.0 mm</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div> <!-- End of templateSettingsGroup -->
+
 
       <!-- Nameplate Settings Wrapper -->
       <div id="nameplateSettingsGroup" class="hidden">
@@ -747,12 +916,7 @@
           </button>
         </div>
       </div>
-      
-      <!-- Sub Tabs for Frame vs Template G-code -->
-      <div class="gcode-tabs" id="gcodeTabsContainer" style="display: flex; gap: 8px; padding: 8px 16px; border-bottom: 1px solid var(--border-subtle); background: var(--bg-canvas);">
-        <button class="btn btn-outlined-mint active" id="tabGcodeFrame" style="padding: 6px 12px; font-size: 0.72rem; border-radius: var(--radius-xs); letter-spacing: 1px; font-family: var(--font-mono);">FRAME G-CODE</button>
-        <button class="btn btn-outlined-mint" id="tabGcodeTemplate" style="padding: 6px 12px; font-size: 0.72rem; border-radius: var(--radius-xs); letter-spacing: 1px; font-family: var(--font-mono);">TEMPLATE (GADA)</button>
-      </div>
+
 
       <div class="gcode-viewer" id="gcodeViewer">
         <pre id="gcodeOutput"><code>; NC 코드가 여기에 표시됩니다.
@@ -794,14 +958,18 @@
         </button>
         
         <!-- Oval Download Buttons -->
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;" id="ovalDownloadButtons">
-          <button class="btn btn-accent btn-lg" id="btnDownload" disabled style="font-size: 0.75rem; justify-content: center; padding: 10px 12px;">
+        <div id="ovalDownloadButtons">
+          <button class="btn btn-accent btn-lg" id="btnDownload" disabled style="width: 100%; font-size: 0.78rem; justify-content: center; padding: 10px 12px;">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
-            DOWNLOAD FRAME
+            DOWNLOAD FRAME NC
           </button>
-          <button class="btn btn-outlined-mint btn-lg" id="btnDownloadTemplate" disabled style="font-size: 0.75rem; justify-content: center; padding: 10px 12px; opacity: 0.25; cursor: not-allowed;">
+        </div>
+
+        <!-- Template Download Buttons -->
+        <div id="templateDownloadButtons" class="hidden">
+          <button class="btn btn-accent btn-lg" id="btnDownloadTemplate" disabled style="width: 100%; font-size: 0.78rem; justify-content: center; padding: 10px 12px;">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
-            DOWNLOAD GADA
+            DOWNLOAD TEMPLATE NC
           </button>
         </div>
 

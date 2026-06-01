@@ -41,8 +41,6 @@ class PreviewRenderer {
     ctx.fillStyle = '#131313';
     ctx.fillRect(0, 0, w, h);
 
-    const isTemplate = gcodeResult && gcodeResult.isTemplate;
-
     // Calculate dimensions
     const outerRx = config.ovalWidth / 2;
     const outerRy = config.ovalHeight / 2;
@@ -52,21 +50,10 @@ class PreviewRenderer {
     const holeRx = innerRx - rabbetWidth;
     const holeRy = innerRy - rabbetWidth;
 
-    let displayWidth = config.ovalWidth;
-    let displayHeight = config.ovalHeight;
-
-    if (isTemplate) {
-      // 가다 구멍 치수 = 관통 내경 + 2 * 래빗폭 + 11mm (즉 innerRx + 5.5 반경)
-      const tempRx = innerRx + 5.5;
-      const tempRy = innerRy + 5.5;
-      displayWidth = tempRx * 2;
-      displayHeight = tempRy * 2;
-    }
-
     // Calculate scale to fit
     const padding = 60;
-    const scaleX = (w - padding * 2) / Math.max(config.ovalWidth, displayWidth + 40);
-    const scaleY = (h - padding * 2) / Math.max(config.ovalHeight, displayHeight + 40);
+    const scaleX = (w - padding * 2) / config.ovalWidth;
+    const scaleY = (h - padding * 2) / config.ovalHeight;
     this.scale = Math.min(scaleX, scaleY);
     const s = this.scale;
     const cx = w / 2, cy = h / 2;
@@ -81,316 +68,155 @@ class PreviewRenderer {
     ctx.strokeRect(cx - 230 * s, cy - 230 * s, 460 * s, 460 * s);
     ctx.setLineDash([]);
 
-    if (isTemplate) {
-      const tempRx = innerRx + 5.5;
-      const tempRy = innerRy + 5.5;
-      const tempRxPx = tempRx * s;
-      const tempRyPx = tempRy * s;
-      
-      // 가다 판재 외각 (구멍보다 20mm 넓게 설정)
-      const plateRxPx = tempRxPx + 20 * s;
-      const plateRyPx = tempRyPx + 20 * s;
+    const outerRxPx = outerRx * s;
+    const outerRyPx = outerRy * s;
+    const innerRxPx = innerRx * s;
+    const innerRyPx = innerRy * s;
+    const holeRxPx = holeRx * s;
+    const holeRyPx = holeRy * s;
+    const toolD = (config.toolDiameter || 6) * s;
+    const chunkRx = holeRxPx - toolD;
+    const chunkRy = holeRyPx - toolD;
 
-      // 1. 가다 판재 바디 (Surface Slate Fill, White Border)
+    // 1. Outer Frame Body (Surface Slate Fill, White Hairline)
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, outerRxPx, outerRyPx, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(45, 45, 45, 0.85)';
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // 2. Rabbet Step Area (Mint Fill to match '턱' guides, Purple Outline)
+    if (innerRxPx > 0 && innerRyPx > 0) {
       ctx.beginPath();
-      ctx.ellipse(cx, cy, plateRxPx, plateRyPx, 0, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(45, 45, 45, 0.85)';
+      ctx.ellipse(cx, cy, innerRxPx, innerRyPx, 0, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(60, 255, 208, 0.12)';
       ctx.fill();
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = '#b886ff';
+      ctx.lineWidth = 1;
       ctx.stroke();
+    }
 
-      // 2. 가다 내경 구멍 (Background Canvas Black, Mint Outline)
+    // 3. Cutout Slot (Background Canvas Black shows through, Mint Outline)
+    if (holeRxPx > 0 && holeRyPx > 0) {
       ctx.beginPath();
-      ctx.ellipse(cx, cy, tempRxPx, tempRyPx, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx, cy, holeRxPx, holeRyPx, 0, 0, Math.PI * 2);
       ctx.fillStyle = '#131313';
       ctx.fill();
-      ctx.strokeStyle = 'rgba(60, 255, 208, 0.7)';
+      ctx.strokeStyle = 'rgba(60, 255, 208, 0.5)';
       ctx.lineWidth = 1.5;
       ctx.setLineDash([4, 2]);
       ctx.stroke();
       ctx.setLineDash([]);
+    }
 
-      // 3. 내경 정보 텍스트
+    // 4. Center Chunk (reusable wood piece - Muted Outline)
+    if (chunkRx > 0 && chunkRy > 0) {
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, chunkRx, chunkRy, 0, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(45, 45, 45, 0.3)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      
       ctx.fillStyle = '#949494';
-      ctx.font = '700 11px "Space Mono"';
+      ctx.font = '700 9px "Space Mono"';
       ctx.textAlign = 'center';
-      ctx.fillText('유리 가다 템플릿 판재', cx, cy - 10);
+      ctx.fillText('알맹이 덩어리', cx, cy - 35);
+      ctx.fillText('(분리됨)', cx, cy - 22);
+    }
+
+    // Draw tabs on outer oval (Jelly Mint indicators)
+    const tabCount = config.tabCount || 4;
+    for (let i = 0; i < tabCount; i++) {
+      const angle = (2 * Math.PI * i) / tabCount;
+      const tx = cx + outerRxPx * Math.cos(angle);
+      const ty = cy + outerRyPx * Math.sin(angle);
+      ctx.beginPath();
+      ctx.arc(tx, ty, 4, 0, Math.PI * 2);
       ctx.fillStyle = '#3cffd0';
-      ctx.fillText(`(가다 구멍 내경: ${displayWidth.toFixed(1)} × ${displayHeight.toFixed(1)}mm)`, cx, cy + 10);
-
-      // 4. 안전 탭 그리기 (Jelly Mint)
-      const tabCount = config.tabCount || 4;
-      for (let i = 0; i < tabCount; i++) {
-        const angle = (2 * Math.PI * i) / tabCount;
-        const tx = cx + (tempRx - (config.toolDiameter / 2)) * s * Math.cos(angle);
-        const ty = cy + (tempRy - (config.toolDiameter / 2)) * s * Math.sin(angle);
-        ctx.beginPath();
-        ctx.arc(tx, ty, 4, 0, Math.PI * 2);
-        ctx.fillStyle = '#3cffd0';
-        ctx.fill();
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-      }
-
-      // 치수선 (가다 구멍 크기)
-      this.drawDimension(ctx, cx - tempRxPx, cy + tempRyPx + 25, cx + tempRxPx, cy + tempRyPx + 25, `${displayWidth.toFixed(1)}mm (가다 내경)`, '#3cffd0');
-      this.drawDimension(ctx, cx + tempRxPx + 25, cy - tempRyPx, cx + tempRxPx + 25, cy + tempRyPx, `${displayHeight.toFixed(1)}mm (가다 내경)`, '#3cffd0');
-
-      // 원점 표시
-      const ox = config.originPosition === 'center' ? cx : cx - plateRxPx;
-      const oy = config.originPosition === 'center' ? cy : cy + plateRyPx;
-      this.drawOrigin(ctx, ox, oy);
-
-      // 5. 액자 가상 실루엣 보조선 및 프레임 폭 / 래빗 폭 치수 표시 (요청사항 반영)
-      const outerRxPx = outerRx * s;
-      const outerRyPx = outerRy * s;
-      const innerRxPx = innerRx * s;
-      const innerRyPx = innerRy * s;
-      const holeRxPx = holeRx * s;
-      const holeRyPx = holeRy * s;
-
-      // 액자 외경 실루엣 (연한 회색 점선)
-      ctx.beginPath();
-      ctx.ellipse(cx, cy, outerRxPx, outerRyPx, 0, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([3, 4]);
-      ctx.stroke();
-
-      // 래빗 외경 실루엣 (연한 보라색 점선)
-      ctx.beginPath();
-      ctx.ellipse(cx, cy, innerRxPx, innerRyPx, 0, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(184, 134, 255, 0.3)';
-      ctx.lineWidth = 1;
-      ctx.stroke();
-
-      // 관통 내경 실루엣 (연한 민트색 점선)
-      ctx.beginPath();
-      ctx.ellipse(cx, cy, holeRxPx, holeRyPx, 0, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(60, 255, 208, 0.2)';
-      ctx.lineWidth = 1;
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      // 프레임 폭 치수선 (지시선 처리)
-      if (innerRxPx > 0) {
-        const fwStartX = cx + innerRxPx;
-        const fwEndX = cx + outerRxPx;
-        const fwY = cy - 20;
-        const fwMidX = (fwStartX + fwEndX) / 2;
-
-        // 영역 수평선
-        ctx.beginPath();
-        ctx.moveTo(fwStartX, fwY);
-        ctx.lineTo(fwEndX, fwY);
-        ctx.strokeStyle = 'rgba(184, 134, 255, 0.75)';
-        ctx.lineWidth = 1.2;
-        ctx.stroke();
-
-        // 우측 지시 꺾임선 (Leader Line)
-        ctx.beginPath();
-        ctx.moveTo(fwMidX, fwY);
-        ctx.lineTo(cx + outerRxPx + 25, cy - 45);
-        ctx.lineTo(cx + outerRxPx + 75, cy - 45);
-        ctx.strokeStyle = 'rgba(184, 134, 255, 0.75)';
-        ctx.lineWidth = 0.8;
-        ctx.stroke();
-
-        // 지시선 텍스트
-        ctx.fillStyle = '#b886ff';
-        ctx.font = '700 9.5px "Space Mono"';
-        ctx.textAlign = 'left';
-        ctx.fillText(`폭 ${config.frameWidth}mm`, cx + outerRxPx + 28, cy - 50);
-      }
-
-      // 래빗 폭 치수선 (지시선 처리)
-      if (holeRxPx > 0 && innerRxPx > 0) {
-        const rwStartX = cx + holeRxPx;
-        const rwEndX = cx + innerRxPx;
-        const rwY = cy + 20;
-        const rwMidX = (rwStartX + rwEndX) / 2;
-
-        // 영역 수평선
-        ctx.beginPath();
-        ctx.moveTo(rwStartX, rwY);
-        ctx.lineTo(rwEndX, rwY);
-        ctx.strokeStyle = 'rgba(60, 255, 208, 0.5)';
-        ctx.lineWidth = 1.2;
-        ctx.stroke();
-
-        // 우측 지시 꺾임선 (Leader Line)
-        ctx.beginPath();
-        ctx.moveTo(rwMidX, rwY);
-        ctx.lineTo(cx + outerRxPx + 25, cy + 45);
-        ctx.lineTo(cx + outerRxPx + 75, cy + 45);
-        ctx.strokeStyle = 'rgba(60, 255, 208, 0.5)';
-        ctx.lineWidth = 0.8;
-        ctx.stroke();
-
-        // 지시선 텍스트
-        ctx.fillStyle = '#3cffd0';
-        ctx.font = '700 9.5px "Space Mono"';
-        ctx.textAlign = 'left';
-        ctx.fillText(`턱 ${rabbetWidth}mm`, cx + outerRxPx + 28, cy + 40);
-      }
-
-      // 하단 정보 갱신
-      document.getElementById('infoSize').textContent = `가다 내경 ${displayWidth.toFixed(1)} × ${displayHeight.toFixed(1)} mm`;
-      document.getElementById('infoScale').textContent = `SCALE: ${s.toFixed(2)}px/mm (Gada Template Mode)`;
-
-    } else {
-      const outerRxPx = outerRx * s;
-      const outerRyPx = outerRy * s;
-      const innerRxPx = innerRx * s;
-      const innerRyPx = innerRy * s;
-      const holeRxPx = holeRx * s;
-      const holeRyPx = holeRy * s;
-      const toolD = (config.toolDiameter || 6) * s;
-      const chunkRx = holeRxPx - toolD;
-      const chunkRy = holeRyPx - toolD;
-
-      // 1. Outer Frame Body (Surface Slate Fill, White Hairline)
-      ctx.beginPath();
-      ctx.ellipse(cx, cy, outerRxPx, outerRyPx, 0, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(45, 45, 45, 0.85)';
       ctx.fill();
       ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    // Dimension annotations (Jelly Mint)
+    this.drawDimension(ctx, cx - outerRxPx, cy + outerRyPx + 25, cx + outerRxPx, cy + outerRyPx + 25, `${config.ovalWidth}mm`, '#3cffd0');
+    this.drawDimension(ctx, cx + outerRxPx + 25, cy - outerRyPx, cx + outerRxPx + 25, cy + outerRyPx, `${config.ovalHeight}mm`, '#3cffd0');
+
+    // Frame width annotation with Leader Line
+    if (innerRxPx > 0) {
+      const fwStartX = cx + innerRxPx;
+      const fwEndX = cx + outerRxPx;
+      const fwY = cy - 20;
+      const fwMidX = (fwStartX + fwEndX) / 2;
+
+      // 영역 수평선
+      ctx.beginPath();
+      ctx.moveTo(fwStartX, fwY);
+      ctx.lineTo(fwEndX, fwY);
+      ctx.strokeStyle = '#b886ff';
+      ctx.lineWidth = 1.2;
       ctx.stroke();
 
-      // 2. Rabbet Step Area (Mint Fill to match '턱' guides, Purple Outline)
-      if (innerRxPx > 0 && innerRyPx > 0) {
-        ctx.beginPath();
-        ctx.ellipse(cx, cy, innerRxPx, innerRyPx, 0, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(60, 255, 208, 0.12)';
-        ctx.fill();
-        ctx.strokeStyle = '#b886ff';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-      }
+      // 우측 지시 꺾임선 (Leader Line)
+      ctx.beginPath();
+      ctx.moveTo(fwMidX, fwY);
+      ctx.lineTo(cx + outerRxPx + 25, cy - 45);
+      ctx.lineTo(cx + outerRxPx + 75, cy - 45);
+      ctx.strokeStyle = '#b886ff';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
 
-      // 3. Cutout Slot (Background Canvas Black shows through, Mint Outline)
-      if (holeRxPx > 0 && holeRyPx > 0) {
-        ctx.beginPath();
-        ctx.ellipse(cx, cy, holeRxPx, holeRyPx, 0, 0, Math.PI * 2);
-        ctx.fillStyle = '#131313';
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(60, 255, 208, 0.5)';
-        ctx.lineWidth = 1.5;
-        ctx.setLineDash([4, 2]);
-        ctx.stroke();
-        ctx.setLineDash([]);
-      }
-
-      // 4. Center Chunk (reusable wood piece - Muted Outline)
-      if (chunkRx > 0 && chunkRy > 0) {
-        ctx.beginPath();
-        ctx.ellipse(cx, cy, chunkRx, chunkRy, 0, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(45, 45, 45, 0.3)';
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-        
-        ctx.fillStyle = '#949494';
-        ctx.font = '700 9px "Space Mono"';
-        ctx.textAlign = 'center';
-        ctx.fillText('알맹이 덩어리', cx, cy - 35);
-        ctx.fillText('(분리됨)', cx, cy - 22);
-      }
-
-      // Draw tabs on outer oval (Jelly Mint indicators)
-      const tabCount = config.tabCount || 4;
-      for (let i = 0; i < tabCount; i++) {
-        const angle = (2 * Math.PI * i) / tabCount;
-        const tx = cx + outerRxPx * Math.cos(angle);
-        const ty = cy + outerRyPx * Math.sin(angle);
-        ctx.beginPath();
-        ctx.arc(tx, ty, 4, 0, Math.PI * 2);
-        ctx.fillStyle = '#3cffd0';
-        ctx.fill();
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-      }
-
-      // Dimension annotations (Jelly Mint)
-      this.drawDimension(ctx, cx - outerRxPx, cy + outerRyPx + 25, cx + outerRxPx, cy + outerRyPx + 25, `${config.ovalWidth}mm`, '#3cffd0');
-      this.drawDimension(ctx, cx + outerRxPx + 25, cy - outerRyPx, cx + outerRxPx + 25, cy + outerRyPx, `${config.ovalHeight}mm`, '#3cffd0');
-
-      // Frame width annotation with Leader Line
-      if (innerRxPx > 0) {
-        const fwStartX = cx + innerRxPx;
-        const fwEndX = cx + outerRxPx;
-        const fwY = cy - 20;
-        const fwMidX = (fwStartX + fwEndX) / 2;
-
-        // 영역 수평선
-        ctx.beginPath();
-        ctx.moveTo(fwStartX, fwY);
-        ctx.lineTo(fwEndX, fwY);
-        ctx.strokeStyle = '#b886ff';
-        ctx.lineWidth = 1.2;
-        ctx.stroke();
-
-        // 우측 지시 꺾임선 (Leader Line)
-        ctx.beginPath();
-        ctx.moveTo(fwMidX, fwY);
-        ctx.lineTo(cx + outerRxPx + 25, cy - 45);
-        ctx.lineTo(cx + outerRxPx + 75, cy - 45);
-        ctx.strokeStyle = '#b886ff';
-        ctx.lineWidth = 0.8;
-        ctx.stroke();
-
-        // 지시선 텍스트
-        ctx.fillStyle = '#b886ff';
-        ctx.font = '700 9.5px "Space Mono"';
-        ctx.textAlign = 'left';
-        ctx.fillText(`폭 ${config.frameWidth}mm`, cx + outerRxPx + 28, cy - 50);
-      }
-
-      // Rabbet width annotation with Leader Line
-      if (holeRxPx > 0 && innerRxPx > 0) {
-        const rwStartX = cx + holeRxPx;
-        const rwEndX = cx + innerRxPx;
-        const rwY = cy + 20;
-        const rwMidX = (rwStartX + rwEndX) / 2;
-
-        // 영역 수평선
-        ctx.beginPath();
-        ctx.moveTo(rwStartX, rwY);
-        ctx.lineTo(rwEndX, rwY);
-        ctx.strokeStyle = '#3cffd0';
-        ctx.lineWidth = 1.2;
-        ctx.stroke();
-
-        // 우측 지시 꺾임선 (Leader Line)
-        ctx.beginPath();
-        ctx.moveTo(rwMidX, rwY);
-        ctx.lineTo(cx + outerRxPx + 25, cy + 45);
-        ctx.lineTo(cx + outerRxPx + 75, cy + 45);
-        ctx.strokeStyle = '#3cffd0';
-        ctx.lineWidth = 0.8;
-        ctx.stroke();
-
-        // 지시선 텍스트
-        ctx.fillStyle = '#3cffd0';
-        ctx.font = '700 9.5px "Space Mono"';
-        ctx.textAlign = 'left';
-        ctx.fillText(`턱 ${rabbetWidth}mm`, cx + outerRxPx + 28, cy + 40);
-      }
-
-      // Origin marker
-      const ox = config.originPosition === 'center' ? cx : cx - outerRxPx;
-      const oy = config.originPosition === 'center' ? cy : cy + outerRyPx;
-      this.drawOrigin(ctx, ox, oy);
-
-      // Update info
-      document.getElementById('infoSize').textContent = `${config.ovalWidth} × ${config.ovalHeight} mm`;
-      document.getElementById('infoScale').textContent = `SCALE: ${s.toFixed(2)}px/mm`;
+      // 지시선 텍스트
+      ctx.fillStyle = '#b886ff';
+      ctx.font = '700 9.5px "Space Mono"';
+      ctx.textAlign = 'left';
+      ctx.fillText(`폭 ${config.frameWidth}mm`, cx + outerRxPx + 28, cy - 50);
     }
+
+    // Rabbet width annotation with Leader Line
+    if (holeRxPx > 0 && innerRxPx > 0) {
+      const rwStartX = cx + holeRxPx;
+      const rwEndX = cx + innerRxPx;
+      const rwY = cy + 20;
+      const rwMidX = (rwStartX + rwEndX) / 2;
+
+      // 영역 수평선
+      ctx.beginPath();
+      ctx.moveTo(rwStartX, rwY);
+      ctx.lineTo(rwEndX, rwY);
+      ctx.strokeStyle = '#b886ff';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+
+      // 우측 지시 꺾임선 (Leader Line)
+      ctx.beginPath();
+      ctx.moveTo(rwMidX, rwY);
+      ctx.lineTo(cx + outerRxPx + 25, cy + 45);
+      ctx.lineTo(cx + outerRxPx + 75, cy + 45);
+      ctx.strokeStyle = '#b886ff';
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+
+      // 지시선 텍스트
+      ctx.fillStyle = '#b886ff';
+      ctx.font = '700 9.5px "Space Mono"';
+      ctx.textAlign = 'left';
+      ctx.fillText(`턱 ${rabbetWidth}mm`, cx + outerRxPx + 28, cy + 40);
+    }
+
+    // Origin marker
+    const ox = config.originPosition === 'center' ? cx : cx - outerRxPx;
+    const oy = config.originPosition === 'center' ? cy : cy + outerRyPx;
+    this.drawOrigin(ctx, ox, oy);
+
+    // Update info
+    document.getElementById('infoSize').textContent = `${config.ovalWidth} × ${config.ovalHeight} mm`;
+    document.getElementById('infoScale').textContent = `SCALE: ${s.toFixed(2)}px/mm`;
   }
 
   /**
@@ -1010,6 +836,272 @@ class PreviewRenderer {
     });
   }
 
+  drawTemplateTopView(config, gcodeResult) {
+    this.resize();
+    const ctx = this.ctx;
+    const w = this.w, h = this.h;
+
+    ctx.clearRect(0, 0, w, h);
+
+    // Background (Canvas Black)
+    ctx.fillStyle = '#131313';
+    ctx.fillRect(0, 0, w, h);
+
+    // Calculate dimensions
+    const outerRx = config.ovalWidth / 2;
+    const outerRy = config.ovalHeight / 2;
+    const innerRx = outerRx - config.frameWidth;
+    const innerRy = outerRy - config.frameWidth;
+    const rabbetWidth = config.rabbetWidth || 5;
+    const holeRx = innerRx - rabbetWidth;
+    const holeRy = innerRy - rabbetWidth;
+
+    const tmplOffset = config.tmplOffset !== undefined ? config.tmplOffset : 11.0;
+    const tempRx = innerRx + tmplOffset / 2;
+    const tempRy = innerRy + tmplOffset / 2;
+    const displayWidth = tempRx * 2;
+    const displayHeight = tempRy * 2;
+
+    // Calculate scale to fit
+    const padding = 60;
+    const scaleX = (w - padding * 2) / (displayWidth + 40);
+    const scaleY = (h - padding * 2) / (displayHeight + 40);
+    this.scale = Math.min(scaleX, scaleY);
+    const s = this.scale;
+    const cx = w / 2, cy = h / 2;
+
+    // Draw grid
+    this.drawGrid(ctx, cx, cy, s, w, h);
+
+    // Draw work area boundary (460x460) - Ultraviolet
+    ctx.strokeStyle = 'rgba(184, 134, 255, 0.35)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([8, 4]);
+    ctx.strokeRect(cx - 230 * s, cy - 230 * s, 460 * s, 460 * s);
+    ctx.setLineDash([]);
+
+    const tempRxPx = tempRx * s;
+    const tempRyPx = tempRy * s;
+    
+    // 가다 판재 외각 (구멍보다 20mm 넓게 설정)
+    const plateRxPx = tempRxPx + 20 * s;
+    const plateRyPx = tempRyPx + 20 * s;
+
+    // 1. 가다 사각형 판재 바디 (가다 원형을 제외한 영역을 회색 판재로 표현)
+    ctx.beginPath();
+    ctx.rect(cx - plateRxPx, cy - plateRyPx, plateRxPx * 2, plateRyPx * 2);
+    ctx.fillStyle = 'rgba(45, 45, 45, 0.85)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // 2. 가다 내경 구멍 (가운데 실제 가다 구멍은 뚫어서 백그라운드 검은색으로 표현)
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, tempRxPx, tempRyPx, 0, 0, Math.PI * 2);
+    ctx.fillStyle = '#131313';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(60, 255, 208, 0.8)';
+    ctx.lineWidth = 1.8;
+    ctx.setLineDash([4, 2]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // 4. 내경 정보 텍스트 (판재 상단 영역으로 이동하여 중앙 Origin과 겹치지 않게 배치)
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '700 11px "Space Mono"';
+    ctx.textAlign = 'center';
+    ctx.fillText('유리 가다 템플릿 판재', cx, cy - tempRyPx - 20);
+    ctx.fillStyle = '#3cffd0';
+    ctx.fillText(`(가다 구멍 내경: ${displayWidth.toFixed(1)} × ${displayHeight.toFixed(1)}mm)`, cx, cy - tempRyPx - 5);
+
+    // 4. 안전 탭 그리기 (Jelly Mint)
+    const tabCount = config.tabCount || 4;
+    for (let i = 0; i < tabCount; i++) {
+      const angle = (2 * Math.PI * i) / tabCount;
+      const tx = cx + (tempRx - (config.toolDiameter / 2)) * s * Math.cos(angle);
+      const ty = cy + (tempRy - (config.toolDiameter / 2)) * s * Math.sin(angle);
+      ctx.beginPath();
+      ctx.arc(tx, ty, 4, 0, Math.PI * 2);
+      ctx.fillStyle = '#3cffd0';
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    // 치수선 (가다 구멍 크기)
+    this.drawDimension(ctx, cx - tempRxPx, cy + tempRyPx + 25, cx + tempRxPx, cy + tempRyPx + 25, `${displayWidth.toFixed(1)}mm (가다 내경)`, '#3cffd0');
+    this.drawDimension(ctx, cx + tempRxPx + 25, cy - tempRyPx, cx + tempRxPx + 25, cy + tempRyPx, `${displayHeight.toFixed(1)}mm (가다 내경)`, '#3cffd0');
+
+    // 원점 표시
+    const ox = config.originPosition === 'center' ? cx : cx - plateRxPx;
+    const oy = config.originPosition === 'center' ? cy : cy + plateRyPx;
+    this.drawOrigin(ctx, ox, oy);
+
+    // 5. 액자 가상 실루엣 보조선 및 프레임 폭 / 래빗 폭 치수 표시 (제거하여 판재와 가다 구멍만 깔끔하게 노출)
+
+    // 하단 정보 갱신
+    document.getElementById('infoSize').textContent = `가다 내경 ${displayWidth.toFixed(1)} × ${displayHeight.toFixed(1)} mm`;
+    document.getElementById('infoScale').textContent = `SCALE: ${s.toFixed(2)}px/mm (Gada Template Mode)`;
+  }
+
+  drawTemplateToolpath(config, gcodeResult) {
+    this.resize();
+    const ctx = this.ctx;
+    const w = this.w, h = this.h;
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = '#131313';
+    ctx.fillRect(0, 0, w, h);
+
+    const outerRx = config.ovalWidth / 2;
+    const outerRy = config.ovalHeight / 2;
+    const innerRx = outerRx - config.frameWidth;
+    const innerRy = outerRy - config.frameWidth;
+    const tmplOffset = config.tmplOffset !== undefined ? config.tmplOffset : 11.0;
+    const tempRx = innerRx + tmplOffset / 2;
+    const tempRy = innerRy + tmplOffset / 2;
+    const displayWidth = tempRx * 2;
+    const displayHeight = tempRy * 2;
+
+    const padding = 60;
+    const scaleX = (w - padding * 2) / (displayWidth + 40);
+    const scaleY = (h - padding * 2) / (displayHeight + 40);
+    const s = Math.min(scaleX, scaleY);
+    const cx = w / 2, cy = h / 2;
+
+    this.drawGrid(ctx, cx, cy, s, w, h);
+
+    // Parse gcode lines for toolpath visualization
+    if (!gcodeResult || !gcodeResult.gcode) return;
+
+    const lines = gcodeResult.gcode.split('\n');
+    let curX = 0, curY = 0;
+    let isRapid = false;
+
+    ctx.lineWidth = 1.5;
+
+    lines.forEach(line => {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith(';')) return;
+
+      const parts = trimmed.split(/\s+/);
+      const isG0 = parts.includes('G0');
+      const isG1 = parts.includes('G1');
+
+      if (isG0) isRapid = true;
+      else if (isG1) isRapid = false;
+
+      let targetX = curX;
+      let targetY = curY;
+      let hasCoord = false;
+
+      parts.forEach(p => {
+        if (p.startsWith('X')) {
+          targetX = parseFloat(p.substring(1));
+          hasCoord = true;
+        } else if (p.startsWith('Y')) {
+          targetY = parseFloat(p.substring(1));
+          hasCoord = true;
+        }
+      });
+
+      if (hasCoord) {
+        ctx.beginPath();
+        ctx.moveTo(cx + curX * s, cy - curY * s);
+        ctx.lineTo(cx + targetX * s, cy - targetY * s);
+
+        if (isRapid) {
+          ctx.strokeStyle = 'rgba(248, 113, 113, 0.3)';
+          ctx.setLineDash([2, 2]);
+          ctx.lineWidth = 0.75;
+        } else {
+          ctx.strokeStyle = 'rgba(60, 255, 208, 0.7)'; // Gada Inner Cutout toolpath - Mint
+          ctx.setLineDash([]);
+          ctx.lineWidth = 1.5;
+        }
+        ctx.stroke();
+
+        curX = targetX;
+        curY = targetY;
+      }
+    });
+
+    ctx.setLineDash([]);
+
+    // Legend
+    const legend = [
+      { label: '가다 내부 절삭', color: 'rgba(60, 255, 208, 0.7)' },
+      { label: '급속 이송 (G0)', color: 'rgba(248, 113, 113, 0.5)' }
+    ];
+    let ly = 20;
+    ctx.font = '700 11px "Space Mono"';
+    for (const item of legend) {
+      ctx.fillStyle = item.color;
+      ctx.fillRect(15, ly, 14, 14);
+      ctx.fillStyle = '#949494';
+      ctx.textAlign = 'left';
+      ctx.fillText(item.label, 35, ly + 11);
+      ly += 22;
+    }
+
+    // Origin marker
+    const tempRxPx = tempRx * s;
+    const tempRyPx = tempRy * s;
+    const plateRxPx = tempRxPx + 20 * s;
+    const plateRyPx = tempRyPx + 20 * s;
+    const ox = config.originPosition === 'center' ? cx : cx - plateRxPx;
+    const oy = config.originPosition === 'center' ? cy : cy + plateRyPx;
+    this.drawOrigin(ctx, ox, oy);
+
+    // SPECIFICATION CARD
+    const boxW = 230;
+    const boxH = 160;
+    const boxX = w - boxW - 20;
+    const boxY = 20;
+
+    ctx.fillStyle = 'rgba(19, 19, 19, 0.88)';
+    ctx.fillRect(boxX, boxY, boxW, boxH);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(boxX, boxY, boxW, boxH);
+
+    ctx.fillStyle = '#3cffd0';
+    ctx.font = '700 10.5px "Space Mono"';
+    ctx.textAlign = 'left';
+    ctx.fillText('SPEC SHEET: GLASS GADA', boxX + 15, boxY + 24);
+
+    ctx.beginPath();
+    ctx.moveTo(boxX + 15, boxY + 32);
+    ctx.lineTo(boxX + boxW - 15, boxY + 32);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+
+    const specs = [
+      { label: '가다 구멍 가로', value: (tempRx * 2).toFixed(1) + ' mm' },
+      { label: '가다 구멍 세로', value: (tempRy * 2).toFixed(1) + ' mm' },
+      { label: '내용물 규격(배면)', value: (innerRx * 2).toFixed(0) + 'x' + (innerRy * 2).toFixed(0) + ' mm' },
+      { label: '가다 판재 두께', value: config.materialThickness + ' mm' },
+      { label: '가공 공구 사양', value: 'Ø' + config.toolDiameter + ' mm (' + config.toolFlutes + '날)' },
+      { label: '안전 고정 탭', value: config.tabCount + '개 (' + config.tabWidth + 'x' + config.tabHeight + ')' }
+    ];
+
+    let rowY = boxY + 50;
+    ctx.font = '500 9px "Space Mono"';
+    specs.forEach(s => {
+      ctx.fillStyle = '#949494';
+      ctx.textAlign = 'left';
+      ctx.fillText(s.label, boxX + 15, rowY);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'right';
+      ctx.fillText(s.value, boxX + boxW - 15, rowY);
+      
+      rowY += 18;
+    });
+  }
+
   render(config, view, gcodeResult) {
     this.currentView = view;
     const isNameplate = config.text !== undefined;
@@ -1017,6 +1109,9 @@ class PreviewRenderer {
     if (isNameplate) {
       if (view === 'top') this.drawNameplateTopView(config, gcodeResult);
       else if (view === 'toolpath') this.drawNameplateToolpath(config, gcodeResult);
+    } else if (config.tmplOffset !== undefined) {
+      if (view === 'top') this.drawTemplateTopView(config, gcodeResult);
+      else if (view === 'toolpath') this.drawTemplateToolpath(config, gcodeResult);
     } else {
       if (view === 'top') this.drawTopView(config, gcodeResult);
       else if (view === 'toolpath') this.drawToolpath(config, gcodeResult);
@@ -1025,3 +1120,4 @@ class PreviewRenderer {
 }
 
 window.PreviewRenderer = PreviewRenderer;
+

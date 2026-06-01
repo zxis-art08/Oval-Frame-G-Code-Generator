@@ -357,11 +357,12 @@ class GCodeGenerator {
 
   /**
    * Generate the glass cutting template (Gada) G-code
-   * Formula: Inner Hole + Rabbet Width + 11mm
+   * Formula: Rabbet Outer Diameter (배면 내경) + tmplOffset
    */
   generateTemplate(config) {
     const params = this.calculateParams(config);
-    const { rpm, feedRate, doc, plungeRate, stepover, safeZ } = params;
+    const { rpm, feedRate, doc, plungeRate, stepover } = params;
+    const safeZ = config.safeZ !== undefined ? config.safeZ : params.safeZ;
 
     const lines = [];
     let totalDist = 0;
@@ -384,7 +385,7 @@ class GCodeGenerator {
     const outerRx = config.ovalWidth / 2;
     const outerRy = config.ovalHeight / 2;
     
-    // 뒤쪽 프레임 폭을 뺀 래빗 외부 경계
+    // 뒤쪽 프레임 폭을 뺀 래빗 외부 경계 (배면 내경의 반지름)
     const innerRx = outerRx - config.frameWidth;
     const innerRy = outerRy - config.frameWidth;
     
@@ -393,9 +394,10 @@ class GCodeGenerator {
     const holeRx = innerRx - rabbetWidth;
     const holeRy = innerRy - rabbetWidth;
 
-    // 가다(유리 재단용 템플릿)의 타원 크기 = 관통 내경 + 래빗폭 * 2 + 11mm (즉 innerRx + 5.5)
-    const tempRx = innerRx + 5.5;
-    const tempRy = innerRy + 5.5;
+    // 가다(유리 재단용 템플릿)의 타원 크기 = 배면 내경 + 오프셋
+    const tmplOffset = config.tmplOffset !== undefined ? config.tmplOffset : 11.0;
+    const tempRx = innerRx + tmplOffset / 2;
+    const tempRy = innerRy + tmplOffset / 2;
 
     // Validate dimensions
     if (tempRx <= 2 || tempRy <= 2) {
@@ -415,8 +417,8 @@ class GCodeGenerator {
     lines.push(`; Machine: ${params.spec.name}`);
     lines.push(`; Material: MDF/Plywood / ${config.materialThickness}mm thick`);
     lines.push(`; Tool: ${config.toolDiameter}mm ${config.toolFlutes}-flute endmill`);
-    lines.push(`; Frame Reference: Inner Hole = ${fmt(holeRx * 2)}x${fmt(holeRy * 2)}mm`);
-    lines.push(`; Formula: Inner Hole + 2 * Rabbet Width (2x${rabbetWidth}mm) + 11mm`);
+    lines.push(`; Frame Reference: Rabbet Outer Diameter (배면 내경) = ${fmt(innerRx * 2)}x${fmt(innerRy * 2)}mm`);
+    lines.push(`; Formula: Rabbet Outer Diameter + Gada Offset (+${tmplOffset}mm)`);
     lines.push(`; Date: ${new Date().toISOString().slice(0,10)}`);
     lines.push(`; =============================================`);
     lines.push('');

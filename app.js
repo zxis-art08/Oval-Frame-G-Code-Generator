@@ -8,7 +8,7 @@
   const canvas = document.getElementById('previewCanvas');
   const renderer = new PreviewRenderer(canvas);
 
-  let currentModule = 'oval'; // 'oval' or 'nameplate'
+  let currentModule = 'oval'; // 'oval', 'template', or 'nameplate'
   let currentView = 'top';
   let lastResult = { frame: null, template: null, nameplate: null };
   let currentGcodeTab = 'frame'; // 'frame' or 'template' (for oval)
@@ -162,6 +162,36 @@
     };
   }
 
+  function getTemplateConfig() {
+    const presetName = document.getElementById('tmplPresetSelect').value;
+    if (!presetName) return null;
+
+    const presets = JSON.parse(localStorage.getItem(OVAL_PRESET_KEY)) || {};
+    const preset = presets[presetName];
+    if (!preset) return null;
+
+    return {
+      isTemplate:        true,
+      ovalWidth:         preset.ovalWidth,
+      ovalHeight:        preset.ovalHeight,
+      frameWidth:        preset.frameWidth,
+      rabbetWidth:       preset.rabbetWidth || 5.0,
+      tmplOffset:        parseFloat(document.getElementById('tmplOffset').value) || 11.0,
+      materialThickness: parseFloat(document.getElementById('tmplMaterialThickness').value) || 15.0,
+      toolDiameter:      parseFloat(document.getElementById('tmplToolDiameter').value) || 6.0,
+      toolFlutes:        2,
+      cncModel:          document.getElementById('tmplCncModel').value,
+      tabCount:          4,
+      tabWidth:          6.0,
+      tabHeight:         2.0,
+      finishAllowance:   0.3,
+      safeZ:             parseFloat(document.getElementById('tmplSafeZ').value) || 5.0,
+      woodType:          document.getElementById('tmplWoodType').value,
+      originPosition:    document.getElementById('tmplOriginPosition').value,
+      enableFinishPass:  document.getElementById('tmplEnableFinishPass').checked
+    };
+  }
+
   // ========== Dynamic Font Loading (Offline-First Hybrid) ==========
   function loadFont(fontName, isSecondFont = false) {
     if (loadedFonts[fontName]) {
@@ -245,11 +275,51 @@
       document.getElementById('machineInfo').textContent = 
         `작업 영역: ${spec.workArea[0]}×${spec.workArea[1]}mm / 최대 RPM: ${spec.maxRPM.toLocaleString()} / 최대 이송: ${spec.maxFeed.toLocaleString()} mm/min`;
 
-      const activeResult = currentGcodeTab === 'frame' ? lastResult.frame : lastResult.template;
-      renderer.render(config, currentView, activeResult);
+      renderer.render(config, currentView, lastResult.frame);
+    } else if (currentModule === 'template') {
+      const config = getTemplateConfig();
+      if (!config) {
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#131313';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#949494';
+        ctx.font = '14px "Space Mono", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('액자 프리셋을 먼저 선택해 주세요.', canvas.width / 2, canvas.height / 2);
+        
+        document.getElementById('tmplFrameInfoCard').style.display = 'none';
+        document.getElementById('tmplCalculatedW').textContent = '0.0 mm';
+        document.getElementById('tmplCalculatedH').textContent = '0.0 mm';
+        return;
+      }
+
+      const innerW = config.ovalWidth - 2 * config.frameWidth;
+      const innerH = config.ovalHeight - 2 * config.frameWidth;
+      
+      document.getElementById('tmplFrameInfoCard').style.display = 'block';
+      document.getElementById('tmplFrameInnerW').textContent = `${innerW.toFixed(1)} mm`;
+      document.getElementById('tmplFrameInnerH').textContent = `${innerH.toFixed(1)} mm`;
+
+      const calculatedW = innerW + config.tmplOffset;
+      const calculatedH = innerH + config.tmplOffset;
+      document.getElementById('tmplCalculatedW').textContent = `${calculatedW.toFixed(1)} mm`;
+      document.getElementById('tmplCalculatedH').textContent = `${calculatedH.toFixed(1)} mm`;
+
+      const params = generator.calculateParams(config);
+      document.getElementById('calcTmplRPM').textContent = params.rpm.toLocaleString();
+      document.getElementById('calcTmplFeed').textContent = `${params.feedRate.toLocaleString()} mm/min`;
+      document.getElementById('calcTmplDOC').textContent = `${params.doc} mm`;
+      document.getElementById('calcTmplPlunge').textContent = `${params.plungeRate.toLocaleString()} mm/min`;
+      document.getElementById('calcTmplSafeZ').textContent = `${config.safeZ} mm`;
+
+      const spec = params.spec;
+      document.getElementById('tmplMachineInfo').textContent = 
+        `작업 영역: ${spec.workArea[0]}×${spec.workArea[1]}mm / 최대 RPM: ${spec.maxRPM.toLocaleString()} / 최대 이송: ${spec.maxFeed.toLocaleString()} mm/min`;
+
+      renderer.render(config, currentView, lastResult.template);
     } else {
       const config = getNameplateConfig();
-      // Gather machining params (simulating calculateParams using diameter & wood type)
       const params = generator.calculateParams({
         cncModel: config.cncModel,
         toolDiameter: config.shankDiameter,
@@ -257,7 +327,6 @@
         woodType: config.woodType
       });
 
-      // Engraving specific DOC override for V-bit tip safety
       const npDoc = Math.min(params.doc, 0.5);
 
       document.getElementById('calcNpRPM').textContent = params.rpm.toLocaleString();
@@ -269,7 +338,6 @@
       document.getElementById('npMachineInfo').textContent = 
         `작업 영역: ${spec.workArea[0]}×${spec.workArea[1]}mm / 최대 RPM: ${spec.maxRPM.toLocaleString()} / 최대 이송: ${spec.maxFeed.toLocaleString()} mm/min`;
 
-      // Pass font outline to renderer
       config.font = activeFont;
       config.font2 = activeFont2;
       renderer.render(config, currentView, lastResult.nameplate);
@@ -286,29 +354,42 @@
       currentModule = item.getAttribute('data-module');
 
       const ovalGroup = document.getElementById('ovalSettingsGroup');
+      const tmplGroup = document.getElementById('templateSettingsGroup');
       const npGroup = document.getElementById('nameplateSettingsGroup');
       const textToolbar = document.getElementById('textToolbar');
-      const gcodeTabsContainer = document.getElementById('gcodeTabsContainer');
       const ovalDownloads = document.getElementById('ovalDownloadButtons');
+      const tmplDownloads = document.getElementById('templateDownloadButtons');
       const npDownloads = document.getElementById('nameplateDownloadButtons');
       const appModeBadge = document.getElementById('appModeBadge');
       const btnGenerateText = document.getElementById('btnGenerateText');
 
       if (currentModule === 'oval') {
         ovalGroup.classList.remove('hidden');
+        tmplGroup.classList.add('hidden');
         npGroup.classList.add('hidden');
         textToolbar.classList.add('hidden');
-        gcodeTabsContainer.classList.remove('hidden');
         ovalDownloads.classList.remove('hidden');
+        tmplDownloads.classList.add('hidden');
         npDownloads.classList.add('hidden');
         appModeBadge.textContent = 'OVAL FRAME';
-        btnGenerateText.textContent = 'GENERATE G-CODE SET';
+        btnGenerateText.textContent = 'GENERATE FRAME G-CODE';
+      } else if (currentModule === 'template') {
+        ovalGroup.classList.add('hidden');
+        tmplGroup.classList.remove('hidden');
+        npGroup.classList.add('hidden');
+        textToolbar.classList.add('hidden');
+        ovalDownloads.classList.add('hidden');
+        tmplDownloads.classList.remove('hidden');
+        npDownloads.classList.add('hidden');
+        appModeBadge.textContent = 'TEMPLATE';
+        btnGenerateText.textContent = 'GENERATE TEMPLATE G-CODE';
       } else {
         ovalGroup.classList.add('hidden');
+        tmplGroup.classList.add('hidden');
         npGroup.classList.remove('hidden');
         textToolbar.classList.remove('hidden');
-        gcodeTabsContainer.classList.add('hidden');
         ovalDownloads.classList.add('hidden');
+        tmplDownloads.classList.add('hidden');
         npDownloads.classList.remove('hidden');
         appModeBadge.textContent = 'NAMEPLATE';
         btnGenerateText.textContent = 'GENERATE NAMEPLATE G-CODE';
@@ -373,7 +454,9 @@
   function displayGcodeResult() {
     let activeResult = null;
     if (currentModule === 'oval') {
-      activeResult = currentGcodeTab === 'frame' ? lastResult.frame : lastResult.template;
+      activeResult = lastResult.frame;
+    } else if (currentModule === 'template') {
+      activeResult = lastResult.template;
     } else {
       activeResult = lastResult.nameplate;
     }
@@ -408,26 +491,6 @@
     }
   }
 
-  // ========== G-code Sub Tabs Switcher (Only for Oval) ==========
-  const tabFrame = document.getElementById('tabGcodeFrame');
-  const tabTemplate = document.getElementById('tabGcodeTemplate');
-
-  tabFrame.addEventListener('click', () => {
-    tabFrame.classList.add('active');
-    tabTemplate.classList.remove('active');
-    currentGcodeTab = 'frame';
-    displayGcodeResult();
-    updateCalcDisplay();
-  });
-
-  tabTemplate.addEventListener('click', () => {
-    tabTemplate.classList.add('active');
-    tabFrame.classList.remove('active');
-    currentGcodeTab = 'template';
-    displayGcodeResult();
-    updateCalcDisplay();
-  });
-
   // ========== G-code Generation Event ==========
   document.getElementById('btnGenerate').addEventListener('click', () => {
     const btn = document.getElementById('btnGenerate');
@@ -438,7 +501,6 @@
       if (currentModule === 'oval') {
         const config = getOvalConfig();
         const frameRes = generator.generate(config);
-        const templateRes = generator.generateTemplate(config);
         
         btn.classList.remove('generating');
         btn.disabled = false;
@@ -447,29 +509,49 @@
           showToast(frameRes.error, 'error');
           return;
         }
-        if (templateRes.error) {
-          showToast(templateRes.error, 'error');
-          return;
-        }
 
         lastResult.frame = frameRes;
-        lastResult.template = templateRes;
-
         displayGcodeResult();
 
-        // Enable download buttons
+        // Enable download button
         document.getElementById('btnDownload').disabled = false;
-        const btnDlTemp = document.getElementById('btnDownloadTemplate');
-        btnDlTemp.disabled = false;
-        btnDlTemp.style.opacity = '1';
-        btnDlTemp.style.cursor = 'pointer';
 
         // Switch to toolpath view
         setPreviewTabActive('toolpath');
         currentView = 'toolpath';
         updateCalcDisplay();
 
-        showToast(`액자 및 유리 가다용 NC 파일 세트 생성 완료!`, 'success');
+        showToast(`액자 가공용 NC 파일 생성 완료!`, 'success');
+      } else if (currentModule === 'template') {
+        const config = getTemplateConfig();
+        if (!config) {
+          btn.classList.remove('generating');
+          btn.disabled = false;
+          showToast('액자 프리셋을 먼저 선택해주세요.', 'error');
+          return;
+        }
+        const templateRes = generator.generateTemplate(config);
+        
+        btn.classList.remove('generating');
+        btn.disabled = false;
+
+        if (templateRes.error) {
+          showToast(templateRes.error, 'error');
+          return;
+        }
+
+        lastResult.template = templateRes;
+        displayGcodeResult();
+
+        // Enable template download button
+        document.getElementById('btnDownloadTemplate').disabled = false;
+
+        // Switch to toolpath view
+        setPreviewTabActive('toolpath');
+        currentView = 'toolpath';
+        updateCalcDisplay();
+
+        showToast(`유리 가다 가공용 NC 파일 생성 완료!`, 'success');
       } else {
         const config = getNameplateConfig();
         if (config.text && !activeFont) {
@@ -492,7 +574,6 @@
 
         if (result.error) {
           showToast(result.error, 'error');
-          // Update safety report to danger if blocked
           if (result.safetyReport) {
             updateValidationReport(result.safetyReport);
           }
@@ -526,8 +607,13 @@
 
   document.getElementById('btnDownloadTemplate').addEventListener('click', () => {
     if (!lastResult.template || !lastResult.template.gcode) return;
-    const config = getOvalConfig();
-    const filename = `oval_template_gada_${config.ovalWidth}x${config.ovalHeight}.nc`;
+    const config = getTemplateConfig();
+    if (!config) return;
+    const innerW = config.ovalWidth - 2 * config.frameWidth;
+    const innerH = config.ovalHeight - 2 * config.frameWidth;
+    const calculatedW = innerW + config.tmplOffset;
+    const calculatedH = innerH + config.tmplOffset;
+    const filename = `template_gada_${calculatedW.toFixed(0)}x${calculatedH.toFixed(0)}.nc`;
     downloadFile(lastResult.template.gcode, filename);
     showToast(`유리 가다용 파일 (${filename}) 다운로드 완료!`, 'success');
   });
@@ -535,7 +621,6 @@
   document.getElementById('btnDownloadNameplate').addEventListener('click', () => {
     if (!lastResult.nameplate || !lastResult.nameplate.gcode) return;
     const config = getNameplateConfig();
-    // Sanitize text for filename
     const cleanText = config.text.replace(/[^a-zA-Z0-9가-힣_-]/g, '_').substring(0, 15);
     const filename = `nameplate_${cleanText}_${config.width}x${config.height}.nc`;
     downloadFile(lastResult.nameplate.gcode, filename);
@@ -560,8 +645,11 @@
     let typeStr = '';
     
     if (currentModule === 'oval') {
-      activeResult = currentGcodeTab === 'frame' ? lastResult.frame : lastResult.template;
-      typeStr = currentGcodeTab === 'frame' ? '액자 가공용' : '유리 가다용';
+      activeResult = lastResult.frame;
+      typeStr = '액자 가공용';
+    } else if (currentModule === 'template') {
+      activeResult = lastResult.template;
+      typeStr = '유리 가다용';
     } else {
       activeResult = lastResult.nameplate;
       typeStr = '명패 각인용';
@@ -602,17 +690,23 @@
       document.getElementById('enableFinishPass').checked = true;
 
       lastResult.frame = null;
-      lastResult.template = null;
-      currentGcodeTab = 'frame';
-
-      tabFrame.classList.add('active');
-      tabTemplate.classList.remove('active');
-
       document.getElementById('btnDownload').disabled = true;
-      const btnDlTemp = document.getElementById('btnDownloadTemplate');
-      btnDlTemp.disabled = true;
-      btnDlTemp.style.opacity = '0.25';
-      btnDlTemp.style.cursor = 'not-allowed';
+    } else if (currentModule === 'template') {
+      document.getElementById('tmplPresetSelect').value = '';
+      document.getElementById('tmplOffset').value = 11.0;
+      document.getElementById('tmplCncModel').value = 'ttc450pro';
+      document.getElementById('tmplMaterialThickness').value = 15.0;
+      document.getElementById('tmplToolDiameter').value = 6.0;
+      document.getElementById('tmplSafeZ').value = 5.0;
+      document.getElementById('tmplWoodType').value = 'softwood';
+      document.getElementById('tmplOriginPosition').value = 'bottomleft';
+      document.getElementById('tmplEnableFinishPass').checked = true;
+
+      lastResult.template = null;
+      document.getElementById('btnDownloadTemplate').disabled = true;
+      document.getElementById('tmplFrameInfoCard').style.display = 'none';
+      document.getElementById('tmplCalculatedW').textContent = '0.0 mm';
+      document.getElementById('tmplCalculatedH').textContent = '0.0 mm';
     } else {
       document.getElementById('npWidth').value = 400;
       document.getElementById('npHeight').value = 80;
@@ -797,6 +891,23 @@
   }
 
   function updatePresetDropdown() {
+    if (currentModule === 'template') {
+      try {
+        const presets = JSON.parse(localStorage.getItem(OVAL_PRESET_KEY)) || {};
+        const select = document.getElementById('tmplPresetSelect');
+        select.innerHTML = '<option value="">-- 프리셋 선택 --</option>';
+        Object.keys(presets).sort().forEach(name => {
+          const option = document.createElement('option');
+          option.value = name;
+          option.textContent = name;
+          select.appendChild(option);
+        });
+      } catch (e) {
+        console.error(e);
+      }
+      return;
+    }
+
     const presets = getPresets();
     const prefix = currentModule === 'oval' ? '' : 'np';
     const select = document.getElementById(prefix ? 'npPresetSelect' : 'presetSelect');
@@ -852,6 +963,40 @@
 
     updateCalcDisplay();
     showToast(`'${name}' 프리셋을 불러왔습니다.`, 'success');
+  }
+
+  function loadSelectedTmplPreset() {
+    const select = document.getElementById('tmplPresetSelect');
+    const name = select.value;
+    const infoCard = document.getElementById('tmplFrameInfoCard');
+    
+    if (!name) {
+      infoCard.style.display = 'none';
+      document.getElementById('tmplCalculatedW').textContent = '0.0 mm';
+      document.getElementById('tmplCalculatedH').textContent = '0.0 mm';
+      updateCalcDisplay();
+      return;
+    }
+
+    const presets = JSON.parse(localStorage.getItem(OVAL_PRESET_KEY)) || {};
+    const preset = presets[name];
+    if (!preset) {
+      infoCard.style.display = 'none';
+      document.getElementById('tmplCalculatedW').textContent = '0.0 mm';
+      document.getElementById('tmplCalculatedH').textContent = '0.0 mm';
+      updateCalcDisplay();
+      return;
+    }
+
+    // Display selected preset specs (Rabbet Outer Diameter = ovalWidth - 2 * frameWidth)
+    const innerW = preset.ovalWidth - 2 * preset.frameWidth;
+    const innerH = preset.ovalHeight - 2 * preset.frameWidth;
+    document.getElementById('tmplFrameInnerW').textContent = `${innerW.toFixed(1)} mm`;
+    document.getElementById('tmplFrameInnerH').textContent = `${innerH.toFixed(1)} mm`;
+    infoCard.style.display = 'block';
+
+    updateCalcDisplay();
+    showToast(`액자 프리셋 '${name}' 규격을 바탕으로 가다 설정을 업데이트했습니다.`, 'success');
   }
 
   function savePreset() {
@@ -1083,6 +1228,8 @@
   document.getElementById('btnDeletePreset').addEventListener('click', deletePreset);
   document.getElementById('btnExportPreset').addEventListener('click', exportPreset);
   document.getElementById('importPresetFile').addEventListener('change', importPreset);
+
+  document.getElementById('tmplPresetSelect').addEventListener('change', loadSelectedTmplPreset);
 
   document.getElementById('npPresetSelect').addEventListener('change', loadSelectedPreset);
   document.getElementById('btnNpSavePreset').addEventListener('click', savePreset);
