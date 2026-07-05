@@ -187,6 +187,19 @@
               </select>
             </div>
           </div>
+          <div class="input-row">
+            <div class="input-group">
+              <label for="ovalDepthPerPass">1회 절입량 (DOC)</label>
+              <div class="input-with-unit">
+                <input type="number" id="ovalDepthPerPass" value="2.0" min="0.1" max="10" step="0.1">
+                <span class="unit">mm</span>
+              </div>
+            </div>
+            <div class="input-group checkbox-group" style="flex-direction: row; align-items: center; gap: 8px; margin-top: 24px;">
+              <input type="checkbox" id="ovalEnableRamping" checked>
+              <label for="ovalEnableRamping" style="margin: 0; cursor: pointer;">램프 진입 적용</label>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -320,37 +333,7 @@
 
       <!-- Template Settings Wrapper -->
       <div id="templateSettingsGroup" class="hidden">
-        <!-- Section 1: Frame Preset Selection -->
-        <section class="panel-section" id="tmplSectionPresetGroup">
-          <div class="section-header" data-toggle="tmplPresetContent">
-            <div class="section-badge-group">
-              <span class="section-kicker">OVAL PRESET</span>
-              <h2 class="section-title">액자 프리셋 불러오기</h2>
-            </div>
-            <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
-          </div>
-          <div class="section-content" id="tmplPresetContent">
-            <div class="input-group">
-              <label for="tmplPresetSelect">액자 프리셋 선택</label>
-              <select id="tmplPresetSelect">
-                <option value="">-- 프리셋 선택 --</option>
-              </select>
-            </div>
-            <div class="info-card" id="tmplFrameInfoCard" style="display: none; background: rgba(255,255,255,0.03); border: 1px dashed var(--border-subtle); padding: 12px; border-radius: var(--radius-sm); margin-top: 10px;">
-              <div style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px; font-weight: bold; letter-spacing: 0.5px;">선택된 액자 규격</div>
-              <div style="display: flex; justify-content: space-between; font-size: 0.78rem; margin-bottom: 4px;">
-                <span>배면 내경 (가로):</span>
-                <span style="font-weight: bold; color: var(--accent-mint);" id="tmplFrameInnerW">0.0 mm</span>
-              </div>
-              <div style="display: flex; justify-content: space-between; font-size: 0.78rem;">
-                <span>배면 내경 (세로):</span>
-                <span style="font-weight: bold; color: var(--accent-mint);" id="tmplFrameInnerH">0.0 mm</span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- Section 2: Template Dimensions -->
+        <!-- Section 1: Template Dimensions -->
         <section class="panel-section" id="tmplSectionDimsGroup">
           <div class="section-header" data-toggle="tmplDimsContent">
             <div class="section-badge-group">
@@ -360,23 +343,28 @@
             <svg class="chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
           </div>
           <div class="section-content" id="tmplDimsContent">
-            <div class="input-group">
-              <label for="tmplOffset">가다 오프셋 (+ mm)</label>
-              <div class="input-with-unit">
-                <input type="number" id="tmplOffset" value="11.0" min="0" max="100" step="0.5">
-                <span class="unit">mm</span>
+            <div class="input-row">
+              <div class="input-group">
+                <label for="tmplWidth">가로 크기</label>
+                <div class="input-with-unit">
+                  <input type="number" id="tmplWidth" value="359" min="50" max="450" step="1">
+                  <span class="unit">mm</span>
+                </div>
+              </div>
+              <div class="input-group">
+                <label for="tmplHeight">세로 크기</label>
+                <div class="input-with-unit">
+                  <input type="number" id="tmplHeight" value="409" min="50" max="450" step="1">
+                  <span class="unit">mm</span>
+                </div>
               </div>
             </div>
-            <div class="info-card" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-subtle); padding: 12px; border-radius: var(--radius-sm); margin-top: 10px;">
-              <div style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px; font-weight: bold; letter-spacing: 0.5px;">계산된 가다 내경 크기</div>
-              <div style="display: flex; justify-content: space-between; font-size: 0.78rem; margin-bottom: 4px;">
-                <span>가다 가로:</span>
-                <span style="font-weight: bold; color: #ffffff;" id="tmplCalculatedW">0.0 mm</span>
-              </div>
-              <div style="display: flex; justify-content: space-between; font-size: 0.78rem;">
-                <span>가다 세로:</span>
-                <span style="font-weight: bold; color: #ffffff;" id="tmplCalculatedH">0.0 mm</span>
-              </div>
+            <div class="input-group">
+              <label for="tmplCutType">가공 유형</label>
+              <select id="tmplCutType">
+                <option value="inner" selected>내경 가공 (구멍 뚫기)</option>
+                <option value="outer">외경 가공 (부재 자르기)</option>
+              </select>
             </div>
           </div>
         </section>
@@ -394,8 +382,8 @@
             <div class="input-group">
               <label for="tmplCncModel">CNC 모델</label>
               <select id="tmplCncModel">
-                <option value="ttc450">TTC 450 (775 스핀들, 80W)</option>
-                <option value="ttc450pro" selected>TTC 450 Pro (500W)</option>
+                <option value="ttc450" selected>TTC 450 (775 스핀들, 80W)</option>
+                <option value="ttc450pro">TTC 450 Pro (500W)</option>
                 <option value="ttc450ultra">TTC 450 Ultra (500W)</option>
               </select>
             </div>
@@ -411,7 +399,7 @@
               <div class="input-group">
                 <label for="tmplToolDiameter">공구 직경</label>
                 <div class="input-with-unit">
-                  <input type="number" id="tmplToolDiameter" value="6.0" min="1" max="20" step="0.1">
+                  <input type="number" id="tmplToolDiameter" value="3.0" min="1" max="20" step="0.1">
                   <span class="unit">mm</span>
                 </div>
               </div>
@@ -433,12 +421,25 @@
                 </select>
               </div>
             </div>
+            <div class="input-row">
+              <div class="input-group">
+                <label for="tmplDepthPerPass">1회 절입량 (DOC)</label>
+                <div class="input-with-unit">
+                  <input type="number" id="tmplDepthPerPass" value="1.0" min="0.1" max="10" step="0.1">
+                  <span class="unit">mm</span>
+                </div>
+              </div>
+              <div class="input-group checkbox-group" style="flex-direction: row; align-items: center; gap: 8px; margin-top: 24px;">
+                <input type="checkbox" id="tmplEnableRamping" checked>
+                <label for="tmplEnableRamping" style="margin: 0; cursor: pointer;">램프 진입 적용</label>
+              </div>
+            </div>
 
             <div class="input-group">
               <label for="tmplOriginPosition">원점 위치</label>
               <select id="tmplOriginPosition">
-                <option value="center">소재 중앙</option>
-                <option value="bottomleft" selected>좌측 하단</option>
+                <option value="center" selected>소재 중앙</option>
+                <option value="bottomleft">좌측 하단</option>
               </select>
             </div>
 
@@ -665,6 +666,19 @@
                 </div>
               </div>
             </div>
+            <div class="input-row">
+              <div class="input-group">
+                <label for="npDepthPerPass">1회 절입량 (DOC)</label>
+                <div class="input-with-unit">
+                  <input type="number" id="npDepthPerPass" value="0.5" min="0.1" max="5" step="0.1">
+                  <span class="unit">mm</span>
+                </div>
+              </div>
+              <div class="input-group checkbox-group" style="flex-direction: row; align-items: center; gap: 8px; margin-top: 24px;">
+                <input type="checkbox" id="npEnableRamping" checked>
+                <label for="npEnableRamping" style="margin: 0; cursor: pointer;">램프 진입 적용</label>
+              </div>
+            </div>
 
             <div class="input-group">
               <label for="npOriginPosition">원점 위치</label>
@@ -672,6 +686,14 @@
                 <option value="center">소재 중앙</option>
                 <option value="bottomleft" selected>좌측 하단</option>
               </select>
+            </div>
+
+            <div class="input-group" style="margin-top: 10px;">
+              <label for="npStepover">해칭 중첩률 (Stepover)</label>
+              <div class="input-with-unit">
+                <input type="number" id="npStepover" value="40" min="5" max="80" step="5">
+                <span class="unit">%</span>
+              </div>
             </div>
 
             <div class="input-group" style="margin-top: 10px; display: flex; align-items: center;">
@@ -783,6 +805,13 @@
               <span class="unit">mm</span>
             </div>
           </div>
+          <div class="text-tool-group" style="width: 60px; margin-left: 8px;">
+            <label for="npLetterSpacing">자간</label>
+            <div class="input-with-unit">
+              <input type="number" id="npLetterSpacing" value="0" min="-50" max="200" step="5">
+              <span class="unit">%</span>
+            </div>
+          </div>
           <div class="text-tool-group" style="width: 60px;">
             <label for="npOffsetX">X 이동</label>
             <div class="input-with-unit">
@@ -861,6 +890,13 @@
             <div class="input-with-unit">
               <input type="number" id="npFontSize2" value="12" min="5" max="150" step="1">
               <span class="unit">mm</span>
+            </div>
+          </div>
+          <div class="text-tool-group" style="width: 60px; margin-left: 8px;">
+            <label for="npLetterSpacing2">자간</label>
+            <div class="input-with-unit">
+              <input type="number" id="npLetterSpacing2" value="0" min="-50" max="200" step="5">
+              <span class="unit">%</span>
             </div>
           </div>
           <div class="text-tool-group" style="width: 60px;">

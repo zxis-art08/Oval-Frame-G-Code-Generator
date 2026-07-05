@@ -124,7 +124,9 @@
       cutDirection:      document.getElementById('cutDirection').value,
       originPosition:    document.getElementById('originPosition').value,
       enableRabbit:      document.getElementById('enableRabbit').checked,
-      enableFinishPass:  document.getElementById('enableFinishPass').checked
+      enableFinishPass:  document.getElementById('enableFinishPass').checked,
+      depthPerPass:      parseFloat(document.getElementById('ovalDepthPerPass').value) || 2.0,
+      enableRamping:     document.getElementById('ovalEnableRamping').checked
     };
   }
 
@@ -147,6 +149,7 @@
       text:              document.getElementById('npText').value,
       fontName:          document.getElementById('npFont').value,
       fontSize:          parseFloat(document.getElementById('npFontSize').value) || 25,
+      letterSpacing:     parseFloat(document.getElementById('npLetterSpacing').value) || 0,
       offsetX:           parseFloat(document.getElementById('npOffsetX').value) || 0,
       offsetY:           parseFloat(document.getElementById('npOffsetY').value) || 0,
       bold:              document.getElementById('npFontBold').checked,
@@ -156,27 +159,22 @@
       text2:             document.getElementById('npText2').value,
       fontName2:         document.getElementById('npFont2').value,
       fontSize2:         parseFloat(document.getElementById('npFontSize2').value) || 12,
+      letterSpacing2:    parseFloat(document.getElementById('npLetterSpacing2').value) || 0,
       offsetX2:          parseFloat(document.getElementById('npOffsetX2').value) || 0,
       offsetY2:          parseFloat(document.getElementById('npOffsetY2').value) || 0,
-      bold2:             document.getElementById('npFontBold2').checked
+      bold2:             document.getElementById('npFontBold2').checked,
+      stepoverPercent:   parseFloat(document.getElementById('npStepover').value) || 40,
+      depthPerPass:      parseFloat(document.getElementById('npDepthPerPass').value) || 0.5,
+      enableRamping:     document.getElementById('npEnableRamping').checked
     };
   }
 
   function getTemplateConfig() {
-    const presetName = document.getElementById('tmplPresetSelect').value;
-    if (!presetName) return null;
-
-    const presets = JSON.parse(localStorage.getItem(OVAL_PRESET_KEY)) || {};
-    const preset = presets[presetName];
-    if (!preset) return null;
-
     return {
       isTemplate:        true,
-      ovalWidth:         preset.ovalWidth,
-      ovalHeight:        preset.ovalHeight,
-      frameWidth:        preset.frameWidth,
-      rabbetWidth:       preset.rabbetWidth || 5.0,
-      tmplOffset:        parseFloat(document.getElementById('tmplOffset').value) || 11.0,
+      width:             parseFloat(document.getElementById('tmplWidth').value) || 300,
+      height:            parseFloat(document.getElementById('tmplHeight').value) || 200,
+      cutType:           document.getElementById('tmplCutType').value,
       materialThickness: parseFloat(document.getElementById('tmplMaterialThickness').value) || 15.0,
       toolDiameter:      parseFloat(document.getElementById('tmplToolDiameter').value) || 6.0,
       toolFlutes:        2,
@@ -188,7 +186,9 @@
       safeZ:             parseFloat(document.getElementById('tmplSafeZ').value) || 5.0,
       woodType:          document.getElementById('tmplWoodType').value,
       originPosition:    document.getElementById('tmplOriginPosition').value,
-      enableFinishPass:  document.getElementById('tmplEnableFinishPass').checked
+      enableFinishPass:  document.getElementById('tmplEnableFinishPass').checked,
+      depthPerPass:      parseFloat(document.getElementById('tmplDepthPerPass').value) || 2.0,
+      enableRamping:     document.getElementById('tmplEnableRamping').checked
     };
   }
 
@@ -278,35 +278,8 @@
       renderer.render(config, currentView, lastResult.frame);
     } else if (currentModule === 'template') {
       const config = getTemplateConfig();
-      if (!config) {
-        const ctx = canvas.getContext('2d');
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = '#131313';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = '#949494';
-        ctx.font = '14px "Space Mono", sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('액자 프리셋을 먼저 선택해 주세요.', canvas.width / 2, canvas.height / 2);
-        
-        document.getElementById('tmplFrameInfoCard').style.display = 'none';
-        document.getElementById('tmplCalculatedW').textContent = '0.0 mm';
-        document.getElementById('tmplCalculatedH').textContent = '0.0 mm';
-        return;
-      }
-
-      const innerW = config.ovalWidth - 2 * config.frameWidth;
-      const innerH = config.ovalHeight - 2 * config.frameWidth;
-      
-      document.getElementById('tmplFrameInfoCard').style.display = 'block';
-      document.getElementById('tmplFrameInnerW').textContent = `${innerW.toFixed(1)} mm`;
-      document.getElementById('tmplFrameInnerH').textContent = `${innerH.toFixed(1)} mm`;
-
-      const calculatedW = innerW + config.tmplOffset;
-      const calculatedH = innerH + config.tmplOffset;
-      document.getElementById('tmplCalculatedW').textContent = `${calculatedW.toFixed(1)} mm`;
-      document.getElementById('tmplCalculatedH').textContent = `${calculatedH.toFixed(1)} mm`;
-
       const params = generator.calculateParams(config);
+      
       document.getElementById('calcTmplRPM').textContent = params.rpm.toLocaleString();
       document.getElementById('calcTmplFeed').textContent = `${params.feedRate.toLocaleString()} mm/min`;
       document.getElementById('calcTmplDOC').textContent = `${params.doc} mm`;
@@ -608,12 +581,7 @@
   document.getElementById('btnDownloadTemplate').addEventListener('click', () => {
     if (!lastResult.template || !lastResult.template.gcode) return;
     const config = getTemplateConfig();
-    if (!config) return;
-    const innerW = config.ovalWidth - 2 * config.frameWidth;
-    const innerH = config.ovalHeight - 2 * config.frameWidth;
-    const calculatedW = innerW + config.tmplOffset;
-    const calculatedH = innerH + config.tmplOffset;
-    const filename = `template_gada_${calculatedW.toFixed(0)}x${calculatedH.toFixed(0)}.nc`;
+    const filename = `template_gada_${config.width.toFixed(0)}x${config.height.toFixed(0)}.nc`;
     downloadFile(lastResult.template.gcode, filename);
     showToast(`유리 가다용 파일 (${filename}) 다운로드 완료!`, 'success');
   });
@@ -688,25 +656,27 @@
       document.getElementById('originPosition').value = 'center';
       document.getElementById('enableRabbit').checked = true;
       document.getElementById('enableFinishPass').checked = true;
+      document.getElementById('ovalDepthPerPass').value = 2.0;
+      document.getElementById('ovalEnableRamping').checked = true;
 
       lastResult.frame = null;
       document.getElementById('btnDownload').disabled = true;
     } else if (currentModule === 'template') {
-      document.getElementById('tmplPresetSelect').value = '';
-      document.getElementById('tmplOffset').value = 11.0;
-      document.getElementById('tmplCncModel').value = 'ttc450pro';
+      document.getElementById('tmplWidth').value = 359;
+      document.getElementById('tmplHeight').value = 409;
+      document.getElementById('tmplCutType').value = 'inner';
+      document.getElementById('tmplCncModel').value = 'ttc450';
       document.getElementById('tmplMaterialThickness').value = 15.0;
-      document.getElementById('tmplToolDiameter').value = 6.0;
+      document.getElementById('tmplToolDiameter').value = 3.0;
       document.getElementById('tmplSafeZ').value = 5.0;
       document.getElementById('tmplWoodType').value = 'softwood';
-      document.getElementById('tmplOriginPosition').value = 'bottomleft';
+      document.getElementById('tmplOriginPosition').value = 'center';
       document.getElementById('tmplEnableFinishPass').checked = true;
+      document.getElementById('tmplDepthPerPass').value = 1.0;
+      document.getElementById('tmplEnableRamping').checked = true;
 
       lastResult.template = null;
       document.getElementById('btnDownloadTemplate').disabled = true;
-      document.getElementById('tmplFrameInfoCard').style.display = 'none';
-      document.getElementById('tmplCalculatedW').textContent = '0.0 mm';
-      document.getElementById('tmplCalculatedH').textContent = '0.0 mm';
     } else {
       document.getElementById('npWidth').value = 400;
       document.getElementById('npHeight').value = 80;
@@ -721,10 +691,13 @@
       document.getElementById('npSafeZ').value = 5.0;
       document.getElementById('npOriginPosition').value = 'bottomleft';
       document.getElementById('npLetterByLetter').checked = true;
+      document.getElementById('npDepthPerPass').value = 0.5;
+      document.getElementById('npEnableRamping').checked = true;
 
       document.getElementById('npText').value = '김민수';
       document.getElementById('npFont').value = 'NanumGothic';
       document.getElementById('npFontSize').value = 25;
+      document.getElementById('npLetterSpacing').value = 0;
       document.getElementById('npOffsetX').value = 25;
       document.getElementById('npOffsetY').value = 0;
       document.getElementById('npFontBold').checked = false;
@@ -735,9 +708,11 @@
       document.getElementById('npText2').value = '교장';
       document.getElementById('npFont2').value = 'NanumGothic';
       document.getElementById('npFontSize2').value = 12;
+      document.getElementById('npLetterSpacing2').value = 0;
       document.getElementById('npOffsetX2').value = -30;
       document.getElementById('npOffsetY2').value = 0;
       document.getElementById('npFontBold2').checked = false;
+      document.getElementById('npStepover').value = 40;
 
       lastResult.nameplate = null;
       activeFont2 = null;
@@ -891,22 +866,7 @@
   }
 
   function updatePresetDropdown() {
-    if (currentModule === 'template') {
-      try {
-        const presets = JSON.parse(localStorage.getItem(OVAL_PRESET_KEY)) || {};
-        const select = document.getElementById('tmplPresetSelect');
-        select.innerHTML = '<option value="">-- 프리셋 선택 --</option>';
-        Object.keys(presets).sort().forEach(name => {
-          const option = document.createElement('option');
-          option.value = name;
-          option.textContent = name;
-          select.appendChild(option);
-        });
-      } catch (e) {
-        console.error(e);
-      }
-      return;
-    }
+    if (currentModule === 'template') return;
 
     const presets = getPresets();
     const prefix = currentModule === 'oval' ? '' : 'np';
@@ -965,39 +925,7 @@
     showToast(`'${name}' 프리셋을 불러왔습니다.`, 'success');
   }
 
-  function loadSelectedTmplPreset() {
-    const select = document.getElementById('tmplPresetSelect');
-    const name = select.value;
-    const infoCard = document.getElementById('tmplFrameInfoCard');
-    
-    if (!name) {
-      infoCard.style.display = 'none';
-      document.getElementById('tmplCalculatedW').textContent = '0.0 mm';
-      document.getElementById('tmplCalculatedH').textContent = '0.0 mm';
-      updateCalcDisplay();
-      return;
-    }
-
-    const presets = JSON.parse(localStorage.getItem(OVAL_PRESET_KEY)) || {};
-    const preset = presets[name];
-    if (!preset) {
-      infoCard.style.display = 'none';
-      document.getElementById('tmplCalculatedW').textContent = '0.0 mm';
-      document.getElementById('tmplCalculatedH').textContent = '0.0 mm';
-      updateCalcDisplay();
-      return;
-    }
-
-    // Display selected preset specs (Rabbet Outer Diameter = ovalWidth - 2 * frameWidth)
-    const innerW = preset.ovalWidth - 2 * preset.frameWidth;
-    const innerH = preset.ovalHeight - 2 * preset.frameWidth;
-    document.getElementById('tmplFrameInnerW').textContent = `${innerW.toFixed(1)} mm`;
-    document.getElementById('tmplFrameInnerH').textContent = `${innerH.toFixed(1)} mm`;
-    infoCard.style.display = 'block';
-
-    updateCalcDisplay();
-    showToast(`액자 프리셋 '${name}' 규격을 바탕으로 가다 설정을 업데이트했습니다.`, 'success');
-  }
+  // Template preset load functionality removed as template now uses direct dimensions.
 
   function savePreset() {
     const prefix = currentModule === 'oval' ? '' : 'np';
@@ -1051,6 +979,7 @@
         npText: document.getElementById('npText').value,
         npFont: document.getElementById('npFont').value,
         npFontSize: parseFloat(document.getElementById('npFontSize').value),
+        npLetterSpacing: parseFloat(document.getElementById('npLetterSpacing').value),
         npOffsetX: parseFloat(document.getElementById('npOffsetX').value),
         npOffsetY: parseFloat(document.getElementById('npOffsetY').value),
         npFontBold: document.getElementById('npFontBold').checked,
@@ -1058,10 +987,12 @@
         npText2: document.getElementById('npText2').value,
         npFont2: document.getElementById('npFont2').value,
         npFontSize2: parseFloat(document.getElementById('npFontSize2').value),
+        npLetterSpacing2: parseFloat(document.getElementById('npLetterSpacing2').value),
         npOffsetX2: parseFloat(document.getElementById('npOffsetX2').value),
         npOffsetY2: parseFloat(document.getElementById('npOffsetY2').value),
         npFontBold2: document.getElementById('npFontBold2').checked,
-        npEngraveMode: document.getElementById('npEngraveMode').value
+        npEngraveMode: document.getElementById('npEngraveMode').value,
+        npStepover: parseFloat(document.getElementById('npStepover').value)
       };
     }
 
@@ -1137,6 +1068,7 @@
         npText: config.text,
         npFont: config.fontName,
         npFontSize: config.fontSize,
+        npLetterSpacing: config.letterSpacing,
         npOffsetX: config.offsetX,
         npOffsetY: config.offsetY,
         npFontBold: config.bold,
@@ -1144,10 +1076,12 @@
         npText2: config.text2,
         npFont2: config.fontName2,
         npFontSize2: config.fontSize2,
+        npLetterSpacing2: config.letterSpacing2,
         npOffsetX2: config.offsetX2,
         npOffsetY2: config.offsetY2,
         npFontBold2: config.bold2,
-        npEngraveMode: config.engraveMode
+        npEngraveMode: config.engraveMode,
+        npStepover: config.stepoverPercent
       };
     }
 
@@ -1229,7 +1163,7 @@
   document.getElementById('btnExportPreset').addEventListener('click', exportPreset);
   document.getElementById('importPresetFile').addEventListener('change', importPreset);
 
-  document.getElementById('tmplPresetSelect').addEventListener('change', loadSelectedTmplPreset);
+  // tmplPresetSelect change listener removed
 
   document.getElementById('npPresetSelect').addEventListener('change', loadSelectedPreset);
   document.getElementById('btnNpSavePreset').addEventListener('click', savePreset);
@@ -1343,6 +1277,24 @@
     };
   }
 
+  function getPathWithSpacing(font, text, x, y, fontSize, letterSpacingPercent) {
+    if (!font) return new opentype.Path();
+    const scale = fontSize / font.unitsPerEm;
+    const glyphs = font.stringToGlyphs(text);
+    const letterSpacing = (fontSize * letterSpacingPercent) / 100;
+    
+    const combinedPath = new opentype.Path();
+    let currentX = x;
+    
+    glyphs.forEach(glyph => {
+      const charPath = glyph.getPath(currentX, y, fontSize);
+      combinedPath.commands.push(...charPath.commands);
+      currentX += glyph.advanceWidth * scale + letterSpacing;
+    });
+    
+    return combinedPath;
+  }
+
   function hitTestText(mx, my) {
     if (currentModule !== 'nameplate' || currentView !== 'top') return null;
     
@@ -1351,23 +1303,23 @@
     
     // Check Text 2 first (overlapping check priority)
     if (config.enableText2 && config.text2 && activeFont2) {
-      const hit = checkTextHit(config.text2, activeFont2, config.fontSize2, config.offsetX2, config.offsetY2, mx, my, geom);
+      const hit = checkTextHit(config.text2, activeFont2, config.fontSize2, config.letterSpacing2, config.offsetX2, config.offsetY2, mx, my, geom);
       if (hit) return 'text2';
     }
     
     // Check Text 1
     if (config.text && activeFont) {
-      const hit = checkTextHit(config.text, activeFont, config.fontSize, config.offsetX, config.offsetY, mx, my, geom);
+      const hit = checkTextHit(config.text, activeFont, config.fontSize, config.letterSpacing, config.offsetX, config.offsetY, mx, my, geom);
       if (hit) return 'text1';
     }
     
     return null;
   }
 
-  function checkTextHit(text, font, fontSize, offsetX, offsetY, mx, my, geom) {
+  function checkTextHit(text, font, fontSize, letterSpacing, offsetX, offsetY, mx, my, geom) {
     const { s, px, py, width, height } = geom;
     
-    const testPath = font.getPath(text, 0, 0, fontSize);
+    const testPath = getPathWithSpacing(font, text, 0, 0, fontSize, letterSpacing);
     const bbox = testPath.getBoundingBox();
     const bx = (bbox.x1 + bbox.x2) / 2;
     const by = (bbox.y1 + bbox.y2) / 2;

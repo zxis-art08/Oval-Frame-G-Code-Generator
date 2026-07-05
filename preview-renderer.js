@@ -335,7 +335,7 @@ class PreviewRenderer {
     // ========== SPECIFICATION CARD (시방서 - 요청사항 반영) ==========
     const isTemplate = gcodeResult && gcodeResult.isTemplate;
     const boxW = 230;
-    const boxH = isTemplate ? 160 : 195;
+    const boxH = isTemplate ? 160 : 231;
     const boxX = w - boxW - 20;
     const boxY = 20;
 
@@ -391,6 +391,8 @@ class PreviewRenderer {
         { label: '단턱 턱폭/깊이', value: (config.rabbetWidth || 5) + ' / ' + config.rabbitDepth + ' mm' },
         { label: '액자 관통 내경', value: (holeRx * 2) + 'x' + (holeRy * 2) + ' mm' },
         { label: '소재 가공 두께', value: config.materialThickness + ' mm' },
+        { label: '1회 절입량 (DOC)', value: (config.depthPerPass !== undefined ? config.depthPerPass : 2.0) + ' mm' },
+        { label: '램프 진입 여부', value: (config.enableRamping ? '적용 (Ramp)' : '직선 진입 (Plunge)') },
         { label: '가공 공구 사양', value: 'Ø' + config.toolDiameter + ' mm (' + config.toolFlutes + '날)' },
         { label: '안전 고정 탭', value: config.tabCount + '개 (' + config.tabWidth + 'x' + config.tabHeight + ')' }
       ];
@@ -497,6 +499,24 @@ class PreviewRenderer {
     }
   }
 
+  getPathWithSpacing(font, text, x, y, fontSize, letterSpacingPercent) {
+    if (!font) return new opentype.Path();
+    const scale = fontSize / font.unitsPerEm;
+    const glyphs = font.stringToGlyphs(text);
+    const letterSpacing = (fontSize * letterSpacingPercent) / 100;
+    
+    const combinedPath = new opentype.Path();
+    let currentX = x;
+    
+    glyphs.forEach(glyph => {
+      const charPath = glyph.getPath(currentX, y, fontSize);
+      combinedPath.commands.push(...charPath.commands);
+      currentX += glyph.advanceWidth * scale + letterSpacing;
+    });
+    
+    return combinedPath;
+  }
+
   drawNameplateTopView(config, gcodeResult) {
     this.resize();
     const ctx = this.ctx;
@@ -558,6 +578,7 @@ class PreviewRenderer {
           text: config.text,
           font: config.font,
           fontSize: config.fontSize,
+          letterSpacing: config.letterSpacing || 0,
           offsetX: config.offsetX,
           offsetY: config.offsetY,
           bold: config.bold
@@ -568,6 +589,7 @@ class PreviewRenderer {
           text: config.text2,
           font: config.font2,
           fontSize: config.fontSize2,
+          letterSpacing: config.letterSpacing2 || 0,
           offsetX: config.offsetX2,
           offsetY: config.offsetY2,
           bold: config.bold2
@@ -575,8 +597,8 @@ class PreviewRenderer {
       }
 
       renderTexts.forEach(t => {
-        // Calculate font path bounding box at 0,0 to center it
-        const testPath = t.font.getPath(t.text, 0, 0, t.fontSize);
+        // Calculate font path bounding box at 0,0 to center it (applying letter spacing)
+        const testPath = this.getPathWithSpacing(t.font, t.text, 0, 0, t.fontSize, t.letterSpacing);
         const bbox = testPath.getBoundingBox();
 
         // Find baseline offsets
@@ -591,8 +613,8 @@ class PreviewRenderer {
         tx += t.offsetX;
         ty -= t.offsetY;
 
-        // Fetch outline path
-        const path = t.font.getPath(t.text, tx, ty, t.fontSize);
+        // Fetch outline path (applying letter spacing)
+        const path = this.getPathWithSpacing(t.font, t.text, tx, ty, t.fontSize, t.letterSpacing);
 
         // Save context state, apply translation to plate top-left, and scale
         ctx.save();
@@ -777,7 +799,7 @@ class PreviewRenderer {
 
     // Spec Sheet Box Overlay
     const boxW = 230;
-    const boxH = config.enableText2 ? 211 : 193;
+    const boxH = (config.enableText2 ? 211 : 193) + 36;
     const boxX = w - boxW - 20;
     const boxY = 20;
 
@@ -809,6 +831,8 @@ class PreviewRenderer {
       { label: '소재 두께', value: `${config.thickness} mm` },
       { label: '가공 방식', value: engModeText },
       { label: '각인 깊이', value: `${config.engraveDepth} mm` },
+      { label: '1회 절입량 (DOC)', value: (config.depthPerPass !== undefined ? config.depthPerPass : 0.5) + ' mm' },
+      { label: '램프 진입 여부', value: (config.enableRamping ? '적용 (Ramp)' : '직선 진입 (Plunge)') },
       { label: '공구 사양', value: `V-Bit ${config.bitAngle}° (R ${config.tipRadius}mm)` },
       { label: '실질 가공 폭', value: `${cutWidth.toFixed(2)} mm` }
     ];
@@ -848,24 +872,19 @@ class PreviewRenderer {
     ctx.fillRect(0, 0, w, h);
 
     // Calculate dimensions
-    const outerRx = config.ovalWidth / 2;
-    const outerRy = config.ovalHeight / 2;
-    const innerRx = outerRx - config.frameWidth;
-    const innerRy = outerRy - config.frameWidth;
-    const rabbetWidth = config.rabbetWidth || 5;
-    const holeRx = innerRx - rabbetWidth;
-    const holeRy = innerRy - rabbetWidth;
+    const targetRx = config.width / 2;
+    const targetRy = config.height / 2;
+    const isInner = config.cutType === 'inner';
 
-    const tmplOffset = config.tmplOffset !== undefined ? config.tmplOffset : 11.0;
-    const tempRx = innerRx + tmplOffset / 2;
-    const tempRy = innerRy + tmplOffset / 2;
-    const displayWidth = tempRx * 2;
-    const displayHeight = tempRy * 2;
+    const plateW = config.width + (isInner ? 40 : 20);
+    const plateH = config.height + (isInner ? 40 : 20);
+    const plateRx = plateW / 2;
+    const plateRy = plateH / 2;
 
     // Calculate scale to fit
     const padding = 60;
-    const scaleX = (w - padding * 2) / (displayWidth + 40);
-    const scaleY = (h - padding * 2) / (displayHeight + 40);
+    const scaleX = (w - padding * 2) / plateW;
+    const scaleY = (h - padding * 2) / plateH;
     this.scale = Math.min(scaleX, scaleY);
     const s = this.scale;
     const cx = w / 2, cy = h / 2;
@@ -880,47 +899,68 @@ class PreviewRenderer {
     ctx.strokeRect(cx - 230 * s, cy - 230 * s, 460 * s, 460 * s);
     ctx.setLineDash([]);
 
-    const tempRxPx = tempRx * s;
-    const tempRyPx = tempRy * s;
-    
-    // 가다 판재 외각 (구멍보다 20mm 넓게 설정)
-    const plateRxPx = tempRxPx + 20 * s;
-    const plateRyPx = tempRyPx + 20 * s;
+    const plateRxPx = plateRx * s;
+    const plateRyPx = plateRy * s;
+    const targetRxPx = targetRx * s;
+    const targetRyPx = targetRy * s;
 
-    // 1. 가다 사각형 판재 바디 (가다 원형을 제외한 영역을 회색 판재로 표현)
-    ctx.beginPath();
-    ctx.rect(cx - plateRxPx, cy - plateRyPx, plateRxPx * 2, plateRyPx * 2);
-    ctx.fillStyle = 'rgba(45, 45, 45, 0.85)';
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
+    // 1. Draw Plate and Shape Cutout
+    if (isInner) {
+      // Inside Cut: Draw solid plate body, then transparent cutout hole
+      ctx.beginPath();
+      ctx.rect(cx - plateRxPx, cy - plateRyPx, plateRxPx * 2, plateRyPx * 2);
+      ctx.fillStyle = 'rgba(45, 45, 45, 0.85)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
 
-    // 2. 가다 내경 구멍 (가운데 실제 가다 구멍은 뚫어서 백그라운드 검은색으로 표현)
-    ctx.beginPath();
-    ctx.ellipse(cx, cy, tempRxPx, tempRyPx, 0, 0, Math.PI * 2);
-    ctx.fillStyle = '#131313';
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(60, 255, 208, 0.8)';
-    ctx.lineWidth = 1.8;
-    ctx.setLineDash([4, 2]);
-    ctx.stroke();
-    ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, targetRxPx, targetRyPx, 0, 0, Math.PI * 2);
+      ctx.fillStyle = '#131313';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(60, 255, 208, 0.8)';
+      ctx.lineWidth = 1.8;
+      ctx.setLineDash([4, 2]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    } else {
+      // Outside Cut: Draw plate bounds as a dotted line, and solid cutout shape body
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.strokeRect(cx - plateRxPx, cy - plateRyPx, plateRxPx * 2, plateRyPx * 2);
+      ctx.setLineDash([]);
 
-    // 4. 내경 정보 텍스트 (판재 상단 영역으로 이동하여 중앙 Origin과 겹치지 않게 배치)
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, targetRxPx, targetRyPx, 0, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(45, 45, 45, 0.85)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(60, 255, 208, 0.8)';
+      ctx.lineWidth = 1.8;
+      ctx.stroke();
+    }
+
+    // 2. Info Label Text
     ctx.fillStyle = '#ffffff';
     ctx.font = '700 11px "Space Mono"';
     ctx.textAlign = 'center';
-    ctx.fillText('유리 가다 템플릿 판재', cx, cy - tempRyPx - 20);
+    ctx.fillText(isInner ? '유리 가다 템플릿 판재 (내경 가공)' : '가다 타원 부재 (외경 가공)', cx, cy - targetRyPx - 20);
     ctx.fillStyle = '#3cffd0';
-    ctx.fillText(`(가다 구멍 내경: ${displayWidth.toFixed(1)} × ${displayHeight.toFixed(1)}mm)`, cx, cy - tempRyPx - 5);
+    ctx.fillText(`(규격: ${config.width.toFixed(1)} × ${config.height.toFixed(1)}mm)`, cx, cy - targetRyPx - 5);
 
-    // 4. 안전 탭 그리기 (Jelly Mint)
+    // 3. Draw Safety Tabs along the toolpath
     const tabCount = config.tabCount || 4;
+    const toolR = config.toolDiameter / 2;
+    const tempRx = isInner ? targetRx - toolR : targetRx + toolR;
+    const tempRy = isInner ? targetRy - toolR : targetRy + toolR;
+    const tempRxPx = tempRx * s;
+    const tempRyPx = tempRy * s;
+
     for (let i = 0; i < tabCount; i++) {
       const angle = (2 * Math.PI * i) / tabCount;
-      const tx = cx + (tempRx - (config.toolDiameter / 2)) * s * Math.cos(angle);
-      const ty = cy + (tempRy - (config.toolDiameter / 2)) * s * Math.sin(angle);
+      const tx = cx + tempRxPx * Math.cos(angle);
+      const ty = cy + tempRyPx * Math.sin(angle);
       ctx.beginPath();
       ctx.arc(tx, ty, 4, 0, Math.PI * 2);
       ctx.fillStyle = '#3cffd0';
@@ -930,19 +970,17 @@ class PreviewRenderer {
       ctx.stroke();
     }
 
-    // 치수선 (가다 구멍 크기)
-    this.drawDimension(ctx, cx - tempRxPx, cy + tempRyPx + 25, cx + tempRxPx, cy + tempRyPx + 25, `${displayWidth.toFixed(1)}mm (가다 내경)`, '#3cffd0');
-    this.drawDimension(ctx, cx + tempRxPx + 25, cy - tempRyPx, cx + tempRxPx + 25, cy + tempRyPx, `${displayHeight.toFixed(1)}mm (가다 내경)`, '#3cffd0');
+    // 4. Dimension lines
+    this.drawDimension(ctx, cx - targetRxPx, cy + targetRyPx + 25, cx + targetRxPx, cy + targetRyPx + 25, `${config.width.toFixed(1)}mm`, '#3cffd0');
+    this.drawDimension(ctx, cx + targetRxPx + 25, cy - targetRyPx, cx + targetRxPx + 25, cy + targetRyPx, `${config.height.toFixed(1)}mm`, '#3cffd0');
 
-    // 원점 표시
+    // 5. Origin Marker
     const ox = config.originPosition === 'center' ? cx : cx - plateRxPx;
     const oy = config.originPosition === 'center' ? cy : cy + plateRyPx;
     this.drawOrigin(ctx, ox, oy);
 
-    // 5. 액자 가상 실루엣 보조선 및 프레임 폭 / 래빗 폭 치수 표시 (제거하여 판재와 가다 구멍만 깔끔하게 노출)
-
-    // 하단 정보 갱신
-    document.getElementById('infoSize').textContent = `가다 내경 ${displayWidth.toFixed(1)} × ${displayHeight.toFixed(1)} mm`;
+    // 6. Bottom info display
+    document.getElementById('infoSize').textContent = `가다 규격 ${config.width.toFixed(1)} × ${config.height.toFixed(1)} mm (${isInner ? '내경' : '외경'})`;
     document.getElementById('infoScale').textContent = `SCALE: ${s.toFixed(2)}px/mm (Gada Template Mode)`;
   }
 
@@ -954,19 +992,18 @@ class PreviewRenderer {
     ctx.fillStyle = '#131313';
     ctx.fillRect(0, 0, w, h);
 
-    const outerRx = config.ovalWidth / 2;
-    const outerRy = config.ovalHeight / 2;
-    const innerRx = outerRx - config.frameWidth;
-    const innerRy = outerRy - config.frameWidth;
-    const tmplOffset = config.tmplOffset !== undefined ? config.tmplOffset : 11.0;
-    const tempRx = innerRx + tmplOffset / 2;
-    const tempRy = innerRy + tmplOffset / 2;
-    const displayWidth = tempRx * 2;
-    const displayHeight = tempRy * 2;
+    const targetRx = config.width / 2;
+    const targetRy = config.height / 2;
+    const isInner = config.cutType === 'inner';
+
+    const plateW = config.width + (isInner ? 40 : 20);
+    const plateH = config.height + (isInner ? 40 : 20);
+    const plateRx = plateW / 2;
+    const plateRy = plateH / 2;
 
     const padding = 60;
-    const scaleX = (w - padding * 2) / (displayWidth + 40);
-    const scaleY = (h - padding * 2) / (displayHeight + 40);
+    const scaleX = (w - padding * 2) / plateW;
+    const scaleY = (h - padding * 2) / plateH;
     const s = Math.min(scaleX, scaleY);
     const cx = w / 2, cy = h / 2;
 
@@ -1016,7 +1053,7 @@ class PreviewRenderer {
           ctx.setLineDash([2, 2]);
           ctx.lineWidth = 0.75;
         } else {
-          ctx.strokeStyle = 'rgba(60, 255, 208, 0.7)'; // Gada Inner Cutout toolpath - Mint
+          ctx.strokeStyle = 'rgba(60, 255, 208, 0.7)'; // Gada cutout toolpath - Mint
           ctx.setLineDash([]);
           ctx.lineWidth = 1.5;
         }
@@ -1031,7 +1068,7 @@ class PreviewRenderer {
 
     // Legend
     const legend = [
-      { label: '가다 내부 절삭', color: 'rgba(60, 255, 208, 0.7)' },
+      { label: isInner ? '가다 내부 절삭 (Inside)' : '가다 외부 절삭 (Outside)', color: 'rgba(60, 255, 208, 0.7)' },
       { label: '급속 이송 (G0)', color: 'rgba(248, 113, 113, 0.5)' }
     ];
     let ly = 20;
@@ -1046,17 +1083,15 @@ class PreviewRenderer {
     }
 
     // Origin marker
-    const tempRxPx = tempRx * s;
-    const tempRyPx = tempRy * s;
-    const plateRxPx = tempRxPx + 20 * s;
-    const plateRyPx = tempRyPx + 20 * s;
+    const plateRxPx = plateRx * s;
+    const plateRyPx = plateRy * s;
     const ox = config.originPosition === 'center' ? cx : cx - plateRxPx;
     const oy = config.originPosition === 'center' ? cy : cy + plateRyPx;
     this.drawOrigin(ctx, ox, oy);
 
     // SPECIFICATION CARD
     const boxW = 230;
-    const boxH = 160;
+    const boxH = 195;
     const boxX = w - boxW - 20;
     const boxY = 20;
 
@@ -1069,7 +1104,7 @@ class PreviewRenderer {
     ctx.fillStyle = '#3cffd0';
     ctx.font = '700 10.5px "Space Mono"';
     ctx.textAlign = 'left';
-    ctx.fillText('SPEC SHEET: GLASS GADA', boxX + 15, boxY + 24);
+    ctx.fillText('SPEC SHEET: GADA TEMPLATE', boxX + 15, boxY + 24);
 
     ctx.beginPath();
     ctx.moveTo(boxX + 15, boxY + 32);
@@ -1079,10 +1114,12 @@ class PreviewRenderer {
     ctx.stroke();
 
     const specs = [
-      { label: '가다 구멍 가로', value: (tempRx * 2).toFixed(1) + ' mm' },
-      { label: '가다 구멍 세로', value: (tempRy * 2).toFixed(1) + ' mm' },
-      { label: '내용물 규격(배면)', value: (innerRx * 2).toFixed(0) + 'x' + (innerRy * 2).toFixed(0) + ' mm' },
-      { label: '가다 판재 두께', value: config.materialThickness + ' mm' },
+      { label: '가공 가로 치수', value: config.width.toFixed(1) + ' mm' },
+      { label: '가공 세로 치수', value: config.height.toFixed(1) + ' mm' },
+      { label: '가공 유형', value: isInner ? '내경 가공 (Inside)' : '외경 가공 (Outside)' },
+      { label: '소재 두께', value: config.materialThickness + ' mm' },
+      { label: '1회 절입량 (DOC)', value: (config.depthPerPass !== undefined ? config.depthPerPass : 2.0) + ' mm' },
+      { label: '램프 진입 여부', value: (config.enableRamping ? '적용 (Ramp)' : '직선 진입 (Plunge)') },
       { label: '가공 공구 사양', value: 'Ø' + config.toolDiameter + ' mm (' + config.toolFlutes + '날)' },
       { label: '안전 고정 탭', value: config.tabCount + '개 (' + config.tabWidth + 'x' + config.tabHeight + ')' }
     ];
@@ -1109,7 +1146,7 @@ class PreviewRenderer {
     if (isNameplate) {
       if (view === 'top') this.drawNameplateTopView(config, gcodeResult);
       else if (view === 'toolpath') this.drawNameplateToolpath(config, gcodeResult);
-    } else if (config.tmplOffset !== undefined) {
+    } else if (config.isTemplate) {
       if (view === 'top') this.drawTemplateTopView(config, gcodeResult);
       else if (view === 'toolpath') this.drawTemplateToolpath(config, gcodeResult);
     } else {
